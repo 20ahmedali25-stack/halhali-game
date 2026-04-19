@@ -1,0 +1,2014 @@
+<!DOCTYPE html>
+<!--
+════════════════════════════════════════════════════════
+  🎯 لعبة الحلحلي - النسخة الكاملة
+  
+  ⚡ خطوات ربط Firebase (5 دقائق):
+  
+  1. افتح https://console.firebase.google.com
+  2. أنشئ مشروعاً جديداً (New Project)
+  3. أضف تطبيق ويب (</> Web App)
+  4. انسخ قيم الـ Config وضعها في FB_CONFIG أدناه
+  5. فعّل Authentication > Email/Password
+  6. فعّل Firestore Database > Start in production mode
+  7. في Firestore Rules ضع:
+     rules_version = '2';
+     service cloud.firestore {
+       match /databases/{database}/documents {
+         match /users/{userId} {
+           allow read, write: if request.auth != null && request.auth.uid == userId;
+           allow read: if request.auth != null; // للمتصدرين
+         }
+       }
+     }
+  
+  ✅ بدون Firebase: اللعبة تعمل محلياً (localStorage)
+════════════════════════════════════════════════════════
+-->
+
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لعبة الحلحلي</title>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--gold:#D4AF37;--gold-light:#F0D060;--gold-dark:#A07820;--deep:#0A0A1A;--deep2:#12122A;--red:#C0392B;--red2:#E74C3C;--blue:#1A5276;--blue2:#2980B9;--green:#1A7A4A;--green2:#27AE60;--orange:#E67E22;--purple:#8E44AD;--text:#F5F0E0;--text2:#C8C0A0;--shadow:rgba(212,175,55,0.3);}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Tajawal','Cairo',sans-serif;background:var(--deep);color:var(--text);min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(212,175,55,0.08) 0%,transparent 70%),radial-gradient(ellipse 40% 40% at 20% 80%,rgba(26,82,118,0.15) 0%,transparent 60%);pointer-events:none;z-index:0;}
+.stars{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;}
+.star{position:absolute;border-radius:50%;background:white;opacity:0;animation:twinkle var(--d,3s) var(--delay,0s) infinite;}
+@keyframes twinkle{0%,100%{opacity:0}50%{opacity:var(--op,.8)}}
+
+/* SCREENS */
+.screen{display:none;position:relative;z-index:1;min-height:100vh;}
+.screen.active{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;}
+#screen-board.active,#screen-grade.active,#screen-cats.active{justify-content:flex-start;padding:60px 8px 30px;overflow-y:auto;}
+
+/* LOGO */
+.logo-title{font-family:'Cairo',sans-serif;font-size:clamp(2.5rem,7vw,4.5rem);font-weight:900;color:var(--gold);text-shadow:0 0 40px var(--shadow),0 2px 0 var(--gold-dark);animation:pulseGlow 3s ease-in-out infinite;line-height:1.1;text-align:center;}
+.logo-sub{font-size:.95rem;color:var(--text2);margin-top:6px;letter-spacing:3px;text-align:center;}
+.logo-wrap{margin-bottom:26px;}
+@keyframes pulseGlow{0%,100%{text-shadow:0 0 30px var(--shadow),0 2px 0 var(--gold-dark);}50%{text-shadow:0 0 60px rgba(212,175,55,0.6),0 2px 0 var(--gold-dark);}}
+
+/* CARD */
+.card{background:linear-gradient(135deg,rgba(26,26,58,0.95),rgba(18,18,42,0.98));border:1px solid rgba(212,175,55,0.25);border-radius:20px;padding:30px 36px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,0.5);backdrop-filter:blur(10px);}
+.card-title{font-size:1.5rem;font-weight:800;color:var(--gold);text-align:center;margin-bottom:20px;border-bottom:1px solid rgba(212,175,55,0.2);padding-bottom:13px;}
+
+/* INPUTS */
+.ig{margin-bottom:15px;}
+.ig label{display:block;font-size:.88rem;color:var(--text2);margin-bottom:6px;font-weight:600;}
+.ig input,.ig select{width:100%;padding:11px 15px;background:rgba(255,255,255,0.05);border:1.5px solid rgba(212,175,55,0.25);border-radius:10px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:1rem;direction:rtl;outline:none;transition:border-color .3s;}
+.ig input:focus,.ig select:focus{border-color:var(--gold);}
+.ig input::placeholder{color:rgba(200,192,160,0.4);}
+.ig select option{background:#12122A;}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:12px 26px;border:none;border-radius:12px;font-family:'Cairo',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;transition:all .25s;width:100%;margin-top:5px;}
+.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold-dark));color:#0A0A1A;box-shadow:0 4px 20px rgba(212,175,55,0.35);}
+.btn-gold:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(212,175,55,0.5);}
+.btn-ghost{background:transparent;border:1.5px solid rgba(212,175,55,0.35);color:var(--gold);}
+.btn-ghost:hover{background:rgba(212,175,55,0.08);}
+.btn-red{background:linear-gradient(135deg,var(--red2),var(--red));color:white;}
+.btn-sm{padding:8px 16px;font-size:.88rem;width:auto;}
+.err-msg{color:#E74C3C;font-size:.83rem;text-align:center;margin-top:9px;min-height:18px;}
+.link-row{text-align:center;margin-top:13px;font-size:.88rem;color:var(--text2);}
+.link-row a{color:var(--gold);cursor:pointer;text-decoration:underline;}
+
+/* USER BAR */
+.user-bar{position:fixed;top:0;left:0;right:0;z-index:200;display:flex;align-items:center;justify-content:space-between;padding:10px 18px;background:rgba(10,10,26,0.92);backdrop-filter:blur(12px);border-bottom:1px solid rgba(212,175,55,0.18);}
+.ub-title{font-size:.92rem;color:var(--gold);font-weight:700;}
+.score-pill{background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.3);border-radius:20px;padding:3px 13px;font-size:.8rem;color:var(--gold-light);}
+
+/* MAIN MENU */
+.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:540px;margin-top:18px;}
+.menu-card{background:linear-gradient(135deg,rgba(26,26,58,0.9),rgba(18,18,42,0.95));border:1px solid rgba(212,175,55,0.2);border-radius:16px;padding:20px 14px;text-align:center;cursor:pointer;transition:all .3s;}
+.menu-card:hover{border-color:var(--gold);transform:translateY(-4px);box-shadow:0 10px 28px rgba(212,175,55,0.2);}
+.menu-card .icon{font-size:2.2rem;margin-bottom:9px;}
+.menu-card .label{font-size:.92rem;font-weight:700;}
+.menu-card .sublabel{font-size:.72rem;color:var(--text2);margin-top:3px;}
+
+/* SETUP */
+.setup-card{max-width:600px;}
+.teams-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.team-box{padding:13px;border-radius:12px;text-align:center;border:2px solid;}
+.team-box.t1{border-color:rgba(231,76,60,0.5);background:rgba(231,76,60,0.06);}
+.team-box.t2{border-color:rgba(41,128,185,0.5);background:rgba(41,128,185,0.06);}
+.team-box label{font-size:.8rem;color:var(--text2);display:block;margin-bottom:5px;}
+.team-box input{width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px 11px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:.92rem;text-align:center;outline:none;}
+
+/* DIFF */
+.diff-row{display:flex;gap:8px;margin:10px 0;}
+.diff-btn{flex:1;padding:10px;border-radius:10px;text-align:center;border:2px solid rgba(255,255,255,0.1);background:transparent;cursor:pointer;transition:all .25s;font-size:.85rem;font-weight:700;color:var(--text2);}
+.diff-btn.easy.active{border-color:var(--green2);color:var(--green2);background:rgba(39,174,96,0.1);}
+.diff-btn.med.active{border-color:#F39C12;color:#F39C12;background:rgba(243,156,18,0.1);}
+.diff-btn.hard.active{border-color:var(--red2);color:var(--red2);background:rgba(231,76,60,0.1);}
+
+/* ── GRADE SELECTION SCREEN ── */
+.grade-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;width:100%;max-width:700px;margin-top:16px;}
+.grade-card{background:linear-gradient(135deg,rgba(26,26,58,0.9),rgba(18,18,42,0.95));border:1.5px solid rgba(212,175,55,0.2);border-radius:14px;padding:16px 10px;text-align:center;cursor:pointer;transition:all .3s;}
+.grade-card:hover{border-color:var(--gold);transform:translateY(-3px);box-shadow:0 8px 22px rgba(212,175,55,0.2);}
+.grade-card .gnum{font-size:1.6rem;font-weight:900;color:var(--gold);}
+.grade-card .glbl{font-size:.75rem;color:var(--text2);margin-top:3px;}
+
+/* ── CAT SELECTION IN STUDENT MODE ── */
+.scat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:700px;margin-top:14px;}
+.scat-card{background:linear-gradient(135deg,rgba(26,26,58,0.88),rgba(18,18,42,0.92));border:2px solid rgba(212,175,55,0.18);border-radius:14px;padding:14px 10px;text-align:center;cursor:pointer;transition:all .3s;position:relative;}
+.scat-card.active{border-color:var(--gold);background:rgba(212,175,55,0.1);}
+.scat-card.locked{opacity:.35;cursor:not-allowed;}
+.scat-card .sci{font-size:1.8rem;margin-bottom:5px;}
+.scat-card .scl{font-size:.82rem;font-weight:700;color:var(--text);}
+.scat-max{font-size:.78rem;color:var(--gold-light);text-align:center;margin-bottom:8px;}
+
+/* ── SETUP CAT GRID (general) ── */
+.cat-grid-setup{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:10px 0;}
+.cat-btn-setup{padding:9px 6px;border-radius:10px;text-align:center;border:2px solid rgba(212,175,55,0.2);background:rgba(255,255,255,0.03);cursor:pointer;transition:all .25s;font-size:.82rem;color:var(--text2);}
+.cat-btn-setup.active{border-color:var(--gold);background:rgba(212,175,55,0.12);color:var(--gold);font-weight:700;}
+.cat-btn-setup.locked{opacity:.35;cursor:not-allowed;}
+.cat-btn-setup .cat-icon{font-size:1.3rem;display:block;margin-bottom:3px;}
+.max-note{font-size:.76rem;color:var(--gold-light);text-align:center;margin-bottom:6px;}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   BOARD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.board-header{width:100%;max-width:1180px;margin:0 auto 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:0 4px;}
+.scores-duo{display:flex;align-items:center;gap:9px;}
+.sbox{padding:8px 16px;border-radius:12px;text-align:center;border:2px solid;transition:box-shadow .3s;}
+.sbox.t1{border-color:rgba(231,76,60,0.6);}
+.sbox.t2{border-color:rgba(41,128,185,0.6);}
+.sbox.active-t.t1{box-shadow:0 0 20px rgba(231,76,60,0.5);}
+.sbox.active-t.t2{box-shadow:0 0 20px rgba(41,128,185,0.5);}
+.sbox .sn{font-size:.72rem;color:var(--text2);}
+.sbox .sp{font-size:1.7rem;font-weight:900;color:var(--gold);line-height:1;}
+.vs-d{font-weight:900;color:var(--gold);font-size:.82rem;}
+.turn-badge{padding:6px 14px;border-radius:20px;font-size:.8rem;font-weight:700;background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.3);color:var(--gold-light);}
+
+/* ── BOARD – picture-in-center per-row layout ── */
+.board-wrap{width:100%;max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:8px;}
+
+/* Each category is ONE row: [q q q | IMG | q q q] */
+.cat-row{display:grid;grid-template-columns:repeat(3,1fr) 175px repeat(3,1fr);gap:6px;align-items:center;}
+
+/* Cat image cell */
+.cat-img-cell{border-radius:13px;overflow:hidden;position:relative;height:124px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:8px;border:1.5px solid rgba(212,175,55,0.24);}
+.cat-img-cell .cbg{position:absolute;inset:0;background-size:cover;background-position:center;filter:brightness(.3) saturate(.5);}
+.cat-img-cell .ci-e{position:relative;z-index:1;font-size:1.9rem;}
+.cat-img-cell .ci-l{position:relative;z-index:1;font-size:.78rem;font-weight:900;color:#fff;text-shadow:0 1px 5px rgba(0,0,0,1);margin-top:3px;text-align:center;padding:0 4px;line-height:1.2;}
+.cat-img-cell.no-img{background:linear-gradient(135deg,rgba(26,26,55,0.97),rgba(14,14,34,0.99));justify-content:center;}
+
+/* Question cell – tall square */
+.qcell{border-radius:10px;background:linear-gradient(135deg,rgba(26,26,55,0.9),rgba(14,14,36,0.94));border:1.5px solid rgba(212,175,55,0.14);height:124px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .28s;position:relative;overflow:hidden;gap:4px;}
+.qcell:hover:not(.used){border-color:var(--gold);transform:translateY(-3px);box-shadow:0 6px 20px rgba(212,175,55,0.2);}
+.qcell.used{opacity:.2;cursor:not-allowed;transform:none!important;filter:grayscale(1);}
+.qcell.used::after{content:'✓';position:absolute;font-size:2rem;color:var(--green2);opacity:.7;}
+.qcell .qpts{font-size:1.5rem;font-weight:900;line-height:1;}
+.qcell.easy .qpts{color:var(--green2);}
+.qcell.med  .qpts{color:#F39C12;}
+.qcell.hard .qpts{color:var(--red2);}
+.qcell .qlvl{font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:8px;margin-top:2px;}
+.qcell.easy .qlvl{background:rgba(39,174,96,.15);color:var(--green2);}
+.qcell.med  .qlvl{background:rgba(243,156,18,.15);color:#F39C12;}
+.qcell.hard .qlvl{background:rgba(231,76,60,.15);color:var(--red2);}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   POWERUPS BAR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.powerups-bar{width:100%;max-width:1180px;margin:0 auto 10px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+.pu-btn{padding:7px 16px;border-radius:20px;font-size:.82rem;font-weight:700;cursor:pointer;border:2px solid;transition:all .3s;background:transparent;display:flex;align-items:center;gap:6px;font-family:'Cairo',sans-serif;}
+.pu-btn.hafra{border-color:#9B59B6;color:#9B59B6;}
+.pu-btn.hafra:hover:not(:disabled){background:rgba(155,89,182,.15);}
+.pu-btn.dagf{border-color:#F39C12;color:#F39C12;}
+.pu-btn.dagf:hover:not(:disabled){background:rgba(243,156,18,.15);}
+.pu-btn.eskot{border-color:#E74C3C;color:#E74C3C;}
+.pu-btn.eskot:hover:not(:disabled){background:rgba(231,76,60,.15);}
+.pu-btn:disabled{opacity:.3;cursor:not-allowed;}
+.pu-btn.used-pu{opacity:.25;cursor:not-allowed;text-decoration:line-through;}
+.pu-label{font-size:.72rem;color:var(--text2);text-align:center;margin-top:2px;}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   QUESTION MODAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+#q-modal{display:none;position:fixed;inset:0;z-index:500;background:rgba(5,5,15,0.88);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:14px;}
+#q-modal.open{display:flex;}
+.qm-box{background:linear-gradient(145deg,#12122A,#0E0E20);border:1.5px solid rgba(212,175,55,0.3);border-radius:22px;padding:26px 28px;width:100%;max-width:620px;box-shadow:0 30px 80px rgba(0,0,0,0.7);animation:modalIn .3s ease;}
+@keyframes modalIn{from{opacity:0;transform:scale(.93) translateY(18px);}to{opacity:1;transform:scale(1) translateY(0);}}
+
+.qm-top{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+.qm-badge{padding:4px 12px;border-radius:20px;font-size:.78rem;font-weight:700;}
+.qm-badge.easy{background:rgba(39,174,96,0.2);color:var(--green2);border:1px solid rgba(39,174,96,0.3);}
+.qm-badge.med{background:rgba(243,156,18,0.2);color:#F39C12;border:1px solid rgba(243,156,18,0.3);}
+.qm-badge.hard{background:rgba(231,76,60,0.2);color:var(--red2);border:1px solid rgba(231,76,60,0.3);}
+.qm-cat{font-size:.78rem;color:var(--text2);margin-right:auto;}
+.qm-pts{font-size:.82rem;font-weight:700;}
+
+/* Powerup quick bar inside modal */
+.qm-pu-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.qm-pu{padding:5px 12px;border-radius:14px;font-size:.78rem;font-weight:700;cursor:pointer;border:1.5px solid;background:transparent;font-family:'Cairo',sans-serif;transition:all .25s;}
+.qm-pu.hafra{border-color:#9B59B6;color:#9B59B6;}
+.qm-pu.dagf{border-color:#F39C12;color:#F39C12;}
+.qm-pu.eskot{border-color:#E74C3C;color:#E74C3C;}
+.qm-pu:disabled,.qm-pu.used-pu{opacity:.25;cursor:not-allowed;}
+.qm-pu-note{font-size:.7rem;color:var(--text2);margin-right:4px;}
+
+/* Timer */
+.timer-wrap{display:flex;justify-content:center;margin-bottom:14px;position:relative;width:fit-content;margin-left:auto;margin-right:auto;}
+.timer-wrap svg{transform:rotate(-90deg);}
+.t-track{fill:none;stroke:rgba(255,255,255,0.07);stroke-width:8;}
+.t-prog{fill:none;stroke-width:8;stroke-linecap:round;transition:stroke-dashoffset 1s linear,stroke .5s;}
+.t-num{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.45rem;font-weight:900;color:var(--gold);font-family:'Cairo',sans-serif;}
+
+.qm-text{font-size:clamp(1rem,2.5vw,1.2rem);font-weight:700;line-height:1.75;color:var(--text);text-align:right;margin-bottom:18px;}
+.opts-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.opt-btn{padding:12px 14px;border-radius:11px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(212,175,55,0.18);color:var(--text);font-family:'Tajawal',sans-serif;font-size:.94rem;font-weight:600;cursor:pointer;transition:all .25s;text-align:right;direction:rtl;line-height:1.4;}
+.opt-btn:hover:not(:disabled){border-color:var(--gold);background:rgba(212,175,55,0.08);}
+.opt-btn.correct{border-color:var(--green2)!important;background:rgba(39,174,96,0.18)!important;color:var(--green2)!important;}
+.opt-btn.wrong{border-color:var(--red2)!important;background:rgba(231,76,60,0.18)!important;color:var(--red2)!important;}
+.opt-btn:disabled{cursor:default;}
+.qm-actions{display:flex;gap:10px;margin-top:16px;justify-content:center;}
+
+/* Powerup effect overlay */
+.pu-effect{position:fixed;inset:0;z-index:600;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.pu-effect-text{font-size:clamp(2rem,6vw,4rem);font-weight:900;text-align:center;animation:puPop .8s ease forwards;padding:20px 40px;border-radius:20px;backdrop-filter:blur(4px);}
+@keyframes puPop{0%{opacity:0;transform:scale(.5)}40%{opacity:1;transform:scale(1.1)}70%{transform:scale(0.95)}100%{opacity:0;transform:scale(1)}}
+
+/* RESULT */
+.winner-text{font-size:clamp(1.8rem,5vw,3rem);font-weight:900;color:var(--gold);text-align:center;margin-bottom:10px;animation:pulseGlow 2s infinite;}
+.trophy-big{font-size:4.5rem;text-align:center;margin-bottom:10px;animation:bounce .7s ease-in-out infinite alternate;}
+@keyframes bounce{to{transform:translateY(-12px);}}
+.final-scores{display:flex;gap:18px;margin:18px 0;flex-wrap:wrap;justify-content:center;}
+.final-team{flex:1;min-width:130px;text-align:center;background:rgba(26,26,58,0.8);border-radius:16px;padding:18px;border:2px solid rgba(212,175,55,0.2);}
+.final-team .fn{font-size:1rem;font-weight:700;}
+.final-team .fp{font-size:2.2rem;font-weight:900;color:var(--gold);}
+
+/* LB */
+.lb-row{display:flex;align-items:center;gap:11px;padding:11px 15px;border-radius:11px;background:rgba(255,255,255,0.03);border:1px solid rgba(212,175,55,0.1);margin-bottom:7px;}
+.lb-rank{font-size:1.1rem;font-weight:900;color:var(--gold);width:28px;}
+.lb-name{flex:1;font-weight:600;}
+.lb-pts{font-weight:700;color:var(--gold-light);}
+
+/* TOAST */
+#toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(100px);background:rgba(26,26,58,0.97);border:1px solid rgba(212,175,55,0.3);border-radius:12px;padding:11px 22px;font-weight:600;font-size:.92rem;z-index:9999;transition:transform .35s;pointer-events:none;white-space:nowrap;max-width:90vw;text-align:center;}
+#toast.show{transform:translateX(-50%) translateY(0);}
+#toast.success{border-color:var(--green2);color:var(--green2);}
+#toast.error{border-color:var(--red2);color:var(--red2);}
+#toast.info{border-color:var(--gold);color:var(--gold);}
+#toast.purple{border-color:#9B59B6;color:#9B59B6;}
+
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:var(--deep2);}
+::-webkit-scrollbar-thumb{background:rgba(212,175,55,0.3);border-radius:3px;}
+
+@media(max-width:900px){
+  #board-grid>div{grid-template-columns:repeat(3,1fr) 140px repeat(3,1fr)!important;}
+  .opts-grid{grid-template-columns:1fr 1fr;}
+  .grade-grid{grid-template-columns:repeat(3,1fr);}
+}
+@media(max-width:640px){
+  #board-grid>div{grid-template-columns:repeat(3,1fr) 96px repeat(3,1fr)!important;gap:3px!important;}
+  #board-grid>div>div{height:86px!important;}
+  .opts-grid{grid-template-columns:1fr;}
+  .qm-box{padding:18px 13px;}
+  .scat-grid,.cat-grid-setup{grid-template-columns:repeat(2,1fr);}
+  .grade-grid{grid-template-columns:repeat(3,1fr);}
+  .teams-row{grid-template-columns:1fr;}
+  .card{padding:22px 16px;}
+}
+
+/* ── RESPONSIVE BOARD ── */
+@media(max-width:960px){
+  #board-grid > div { grid-template-columns: repeat(3,1fr) 145px repeat(3,1fr) !important; gap:5px !important; }
+  #board-grid > div > div { height:105px !important; }
+}
+@media(max-width:660px){
+  #board-grid > div { grid-template-columns: repeat(3,1fr) 96px repeat(3,1fr) !important; gap:3px !important; }
+  #board-grid > div > div { height:82px !important; font-size:.85rem; }
+}
+@media(max-width:480px){
+  #board-grid > div { grid-template-columns: repeat(3,1fr) 72px repeat(3,1fr) !important; gap:2px !important; }
+  #board-grid > div > div { height:66px !important; }
+  .opts-grid { grid-template-columns: 1fr !important; }
+  .qm-box { padding: 16px 12px !important; }
+  .grade-grid { grid-template-columns: repeat(3,1fr) !important; }
+  .scat-grid,.cat-grid-setup { grid-template-columns: repeat(2,1fr) !important; }
+  .teams-row { grid-template-columns: 1fr !important; }
+}
+
+/* ── BOARD TOP BAR ── */
+.scores-duo{display:flex;align-items:center;gap:10px;}
+.sbox{padding:7px 18px;border-radius:12px;text-align:center;border:2px solid;transition:box-shadow .3s,transform .3s;}
+.sbox.t1{border-color:rgba(231,76,60,.6);}
+.sbox.t2{border-color:rgba(41,128,185,.6);}
+.sbox.active-t{transform:scale(1.04);}
+.sbox.t1.active-t{box-shadow:0 0 22px rgba(231,76,60,.5);}
+.sbox.t2.active-t{box-shadow:0 0 22px rgba(41,128,185,.5);}
+.sbox .sn{font-size:.7rem;color:var(--text2);}
+.sbox .sp{font-size:1.8rem;font-weight:900;color:var(--gold);line-height:1.1;}
+.vs-d{font-weight:900;color:var(--gold);font-size:.9rem;}
+.turn-badge{padding:6px 16px;border-radius:20px;font-size:.8rem;font-weight:700;background:rgba(212,175,55,.09);border:1px solid rgba(212,175,55,.28);color:var(--gold-light);}
+
+/* ── POWERUPS BAR ── */
+.powerups-bar{width:100%;max-width:1200px;margin:0 auto 6px;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;padding:0 6px;}
+.pu-label{font-size:.68rem;color:var(--text2);text-align:center;margin-top:2px;}
+.pu-btn{padding:7px 15px;border-radius:18px;font-size:.8rem;font-weight:700;cursor:pointer;border:2px solid;transition:all .28s;background:transparent;font-family:'Cairo',sans-serif;display:flex;align-items:center;gap:5px;}
+.pu-btn.hafra{border-color:#9B59B6;color:#9B59B6;}
+.pu-btn.hafra:hover:not(:disabled):not(.used-pu){background:rgba(155,89,182,.14);}
+.pu-btn.hafra.armed{background:rgba(155,89,182,.25);box-shadow:0 0 14px rgba(155,89,182,.6);animation:pulse-pu .8s infinite alternate;}
+.pu-btn.dagf{border-color:#F39C12;color:#F39C12;}
+.pu-btn.dagf:hover:not(:disabled):not(.used-pu){background:rgba(243,156,18,.14);}
+.pu-btn.dagf.armed{background:rgba(243,156,18,.25);box-shadow:0 0 14px rgba(243,156,18,.6);animation:pulse-pu .8s infinite alternate;}
+.pu-btn.eskot{border-color:#E74C3C;color:#E74C3C;}
+.pu-btn.eskot:hover:not(:disabled):not(.used-pu){background:rgba(231,76,60,.14);}
+.pu-btn.eskot.armed{background:rgba(231,76,60,.25);box-shadow:0 0 14px rgba(231,76,60,.6);animation:pulse-pu .8s infinite alternate;}
+.pu-btn:disabled,.pu-btn.used-pu{opacity:.22;cursor:not-allowed;text-decoration:line-through;}
+@keyframes pulse-pu{from{transform:scale(1)}to{transform:scale(1.06)}}
+
+/* ── POWERUP EFFECT SPLASH ── */
+.pu-effect{position:fixed;inset:0;z-index:600;display:none;align-items:center;justify-content:center;pointer-events:none;background:rgba(0,0,0,.15);}
+.pu-effect.show{display:flex;}
+
+/* ── IN-MODAL PU BUTTONS ── */
+.qm-pu-row{display:flex;gap:7px;margin-bottom:11px;flex-wrap:wrap;align-items:center;}
+.qm-pu-note{font-size:.7rem;color:var(--text2);}
+.qm-pub{padding:5px 12px;border-radius:14px;font-size:.76rem;font-weight:700;cursor:pointer;border:1.5px solid;background:transparent;font-family:'Cairo',sans-serif;transition:all .22s;}
+.qm-pub.hafra{border-color:#9B59B6;color:#9B59B6;}
+.qm-pub.dagf{border-color:#F39C12;color:#F39C12;}
+.qm-pub.eskot{border-color:#E74C3C;color:#E74C3C;}
+.qm-pub:disabled,.qm-pub.used-pu{opacity:.2;cursor:not-allowed;}
+.qm-pub.armed{font-weight:900;box-shadow:0 0 8px currentColor;}
+
+/* ── RESULT ── */
+.winner-text{font-size:clamp(1.8rem,5vw,3rem);font-weight:900;color:var(--gold);text-align:center;margin-bottom:10px;animation:pulseGlow 2s infinite;}
+.trophy-big{font-size:4.5rem;text-align:center;margin-bottom:10px;animation:bounce .7s ease-in-out infinite alternate;}
+@keyframes bounce{to{transform:translateY(-14px)}}
+.final-scores{display:flex;gap:18px;margin:18px 0;flex-wrap:wrap;justify-content:center;}
+.final-team{flex:1;min-width:130px;text-align:center;background:rgba(22,22,55,.85);border-radius:16px;padding:18px;border:2px solid rgba(212,175,55,.2);}
+.final-team .fn{font-size:1rem;font-weight:700;}
+.final-team .fp{font-size:2.2rem;font-weight:900;color:var(--gold);}
+
+/* ── LB ── */
+.lb-row{display:flex;align-items:center;gap:11px;padding:11px 14px;border-radius:11px;background:rgba(255,255,255,.03);border:1px solid rgba(212,175,55,.1);margin-bottom:7px;}
+.lb-rank{font-size:1.1rem;font-weight:900;color:var(--gold);width:28px;flex-shrink:0;}
+.lb-name{flex:1;font-weight:600;font-size:.9rem;}
+.lb-pts{font-weight:700;color:var(--gold-light);font-size:.88rem;}
+
+/* alias for modal PU buttons */
+.qm-pu{padding:5px 12px;border-radius:14px;font-size:.76rem;font-weight:700;cursor:pointer;border:1.5px solid;background:transparent;font-family:'Cairo',sans-serif;transition:all .22s;}
+.qm-pu.hafra{border-color:#9B59B6;color:#9B59B6;}
+.qm-pu.dagf{border-color:#F39C12;color:#F39C12;}
+.qm-pu.eskot{border-color:#E74C3C;color:#E74C3C;}
+.qm-pu:disabled,.qm-pu.used-pu{opacity:.2;cursor:not-allowed;}
+.qm-pu.armed{font-weight:900;box-shadow:0 0 8px currentColor;}
+
+/* board-grid acts as flex column container */
+.board-grid{display:flex;flex-direction:column;gap:8px;width:100%;max-width:1200px;margin:0 auto;padding:0 6px 20px;}
+
+</style>
+</head>
+<body>
+<div class="stars" id="stars"></div>
+<div id="toast"></div>
+<div class="pu-effect" id="pu-effect" style="display:none"><div class="pu-effect-text" id="pu-effect-text"></div></div>
+
+<!-- ═══════════ LOGIN ═══════════ -->
+<div class="screen active" id="screen-login">
+  <div class="logo-wrap"><div class="logo-title">🎯 الحلحلي</div><div class="logo-sub">لعبة المعرفة والتنافس</div></div>
+  <div class="card">
+    <div class="card-title">تسجيل الدخول</div>
+    <div class="ig"><label>البريد الإلكتروني</label><input type="email" id="login-email" placeholder="example@email.com" autocomplete="email" style="direction:ltr;text-align:left"></div>
+    <div class="ig"><label>كلمة المرور</label><input type="password" id="login-pass" placeholder="كلمة المرور"></div>
+    <button class="btn btn-gold" onclick="doLogin()">🚀 دخول</button>
+    <div class="err-msg" id="login-err"></div>
+    <div class="link-row">ليس لديك حساب؟ <a onclick="showScreen('screen-register')">سجّل الآن</a></div>
+    <div class="link-row"><a onclick="doResetPass()">نسيت كلمة المرور؟</a></div>
+  </div>
+</div>
+
+<!-- ═══════════ REGISTER ═══════════ -->
+<div class="screen" id="screen-register">
+  <div class="logo-wrap"><div class="logo-title">🎯 الحلحلي</div></div>
+  <div class="card">
+    <div class="card-title">إنشاء حساب جديد</div>
+    <div class="ig"><label>الاسم الكامل</label><input type="text" id="reg-name" placeholder="اكتب اسمك الكامل"></div>
+    <div class="ig"><label>البريد الإلكتروني</label><input type="email" id="reg-email" placeholder="example@email.com" style="direction:ltr;text-align:left"></div>
+    <div class="ig"><label>كلمة المرور</label><input type="password" id="reg-pass" placeholder="6 أحرف على الأقل"></div>
+    <div class="ig"><label>تأكيد كلمة المرور</label><input type="password" id="reg-pass2" placeholder="أعد الكتابة"></div>
+    <button class="btn btn-gold" onclick="doRegister()">✅ إنشاء الحساب</button>
+    <div class="err-msg" id="reg-err"></div>
+    <div class="link-row">لديك حساب؟ <a onclick="showScreen('screen-login')">سجّل دخولك</a></div>
+  </div>
+</div>
+
+<!-- ═══════════ MAIN MENU ═══════════ -->
+<div class="screen" id="screen-menu">
+  <div class="user-bar">
+    <div class="ub-title" id="menu-username">👤 اللاعب</div>
+    <div class="score-pill" id="menu-total">🏆 النقاط: 0</div>
+    <button class="btn btn-ghost btn-sm" onclick="doLogout()">خروج</button>
+  </div>
+  <div class="logo-wrap" style="margin-top:55px"><div class="logo-title">🎯 الحلحلي</div><div class="logo-sub">اختر وضع اللعب</div></div>
+  <div class="menu-grid">
+    <div class="menu-card" onclick="showScreen('screen-setup')"><div class="icon">⚔️</div><div class="label">لعبة جديدة</div><div class="sublabel">فئات متنوعة</div></div>
+    <div class="menu-card" onclick="showScreen('screen-grade')"><div class="icon">🎓</div><div class="label">لعبة الطلاب</div><div class="sublabel">المنهج القطري</div></div>
+    <div class="menu-card" onclick="showScreen('screen-lb')"><div class="icon">🏆</div><div class="label">المتصدرون</div><div class="sublabel">أفضل اللاعبين</div></div>
+    <div class="menu-card" onclick="showScreen('screen-about')"><div class="icon">📖</div><div class="label">قواعد اللعبة</div><div class="sublabel">كيف تلعب؟</div></div>
+  </div>
+</div>
+
+<!-- ═══════════ SETUP (general) ═══════════ -->
+<div class="screen" id="screen-setup">
+  <div class="user-bar"><div class="ub-title">⚙️ إعداد اللعبة</div><button class="btn btn-ghost btn-sm" onclick="showScreen('screen-menu')">← القائمة</button></div>
+  <div class="card setup-card" style="margin-top:72px">
+    <div class="card-title">⚙️ إعداد المباراة</div>
+    <div class="ig">
+      <label>📛 أسماء الفرق</label>
+      <div class="teams-row">
+        <div class="team-box t1"><label>🔴 الفريق الأول</label><input type="text" id="team1-name" value="النسور"></div>
+        <div class="team-box t2"><label>🔵 الفريق الثاني</label><input type="text" id="team2-name" value="الأسود"></div>
+      </div>
+    </div>
+    <div class="ig">
+      <label>📚 الفئات <span style="color:var(--gold);font-size:.78rem">(اختر من 1 إلى 6)</span></label>
+      <div class="max-note" id="cat-max-note">تم اختيار 2 من 6</div>
+      <div class="cat-grid-setup" id="cat-grid"></div>
+    </div>
+    <div class="ig">
+      <label>⚡ مستويات الأسئلة</label>
+      <div class="diff-row">
+        <div class="diff-btn easy active" data-diff="easy" onclick="toggleDiff(this)">سهل<br><small>200 – 30ث</small></div>
+        <div class="diff-btn med active" data-diff="med" onclick="toggleDiff(this)">متوسط<br><small>400 – 60ث</small></div>
+        <div class="diff-btn hard" data-diff="hard" onclick="toggleDiff(this)">صعب<br><small>600 – 90ث</small></div>
+      </div>
+    </div>
+    <button class="btn btn-gold" onclick="startGame(false)" style="margin-top:8px">🎮 ابدأ اللعبة!</button>
+    <div class="err-msg" id="setup-err"></div>
+  </div>
+</div>
+
+<!-- ═══════════ GRADE SELECTION ═══════════ -->
+<div class="screen" id="screen-grade">
+  <div class="user-bar"><div class="ub-title">🎓 لعبة الطلاب</div><button class="btn btn-ghost btn-sm" onclick="showScreen('screen-menu')">← رجوع</button></div>
+  <div style="margin-top:72px;width:100%;max-width:700px;text-align:center">
+    <div style="font-size:1.2rem;font-weight:800;color:var(--gold);margin-bottom:14px">اختر الصف الدراسي</div>
+    <div class="grade-grid" id="grade-grid"></div>
+  </div>
+</div>
+
+<!-- ═══════════ STUDENT CAT SELECTION ═══════════ -->
+<div class="screen" id="screen-cats">
+  <div class="user-bar">
+    <div class="ub-title" id="cats-title">📚 الصف الأول</div>
+    <button class="btn btn-ghost btn-sm" onclick="showScreen('screen-grade')">← رجوع</button>
+  </div>
+  <div style="margin-top:72px;width:100%;max-width:740px">
+    <div style="margin-bottom:14px">
+      <div class="ig">
+        <label>📛 أسماء الفرق</label>
+        <div class="teams-row">
+          <div class="team-box t1"><label>🔴 الفريق الأول</label><input type="text" id="steam1" value="النسور"></div>
+          <div class="team-box t2"><label>🔵 الفريق الثاني</label><input type="text" id="steam2" value="الأسود"></div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:.9rem;color:var(--gold);font-weight:700;margin-bottom:6px">اختر 6 فئات للعب</div>
+    <div class="scat-max" id="scat-max-note">تم اختيار 0 من 6</div>
+    <div class="scat-grid" id="scat-grid"></div>
+    <button class="btn btn-gold" onclick="startStudentGame()" style="margin-top:14px;max-width:400px">🎮 ابدأ اللعبة!</button>
+    <div class="err-msg" id="scat-err"></div>
+  </div>
+</div>
+
+<!-- ═══════════ BOARD ═══════════ -->
+<div class="screen" id="screen-board">
+  <div class="user-bar">
+    <div class="scores-duo">
+      <div class="sbox t1" id="b-score-t1"><div class="sn" id="b-t1-name">ف1</div><div class="sp" id="b-t1-pts">0</div></div>
+      <div class="vs-d">VS</div>
+      <div class="sbox t2" id="b-score-t2"><div class="sn" id="b-t2-name">ف2</div><div class="sp" id="b-t2-pts">0</div></div>
+    </div>
+    <div class="turn-badge" id="b-turn">دور الفريق 1</div>
+    <button class="btn btn-ghost btn-sm" onclick="confirmQuit()">⛔ إنهاء</button>
+  </div>
+  <!-- Powerups bar -->
+  <div class="powerups-bar" style="margin-top:62px" id="pu-bar">
+    <div>
+      <button class="pu-btn hafra" id="pu-hafra" onclick="activatePU('hafra')" title="إذا أجبت صح تُخصم نفس النقاط من الخصم">💣 حفرة</button>
+      <div class="pu-label" id="pu-hafra-cnt">3 ✕</div>
+    </div>
+    <div>
+      <button class="pu-btn dagf" id="pu-dagf" onclick="activatePU('dagf')" title="تضاعف نقاطك إذا أجبت صح">⚡ ضعّف</button>
+      <div class="pu-label" id="pu-dagf-cnt">3 ✕</div>
+    </div>
+    <div>
+      <button class="pu-btn eskot" id="pu-eskot" onclick="activatePU('eskot')" title="إذا أخطأت تحرم الخصم من الإجابة">🤐 اسكت</button>
+      <div class="pu-label" id="pu-eskot-cnt">3 ✕</div>
+    </div>
+  </div>
+  <div class="board-grid" id="board-grid" style="margin-top:8px"></div>
+</div>
+
+<!-- ═══════════ QUESTION MODAL ═══════════ -->
+<div id="q-modal">
+  <div class="qm-box">
+    <div class="qm-top">
+      <span class="qm-badge" id="qm-diff">متوسط</span>
+      <span class="qm-pts" id="qm-pts">400 نقطة</span>
+      <span class="qm-cat" id="qm-cat">📚 التاريخ</span>
+    </div>
+    <!-- Powerup row inside modal -->
+    <div class="qm-pu-row" id="qm-pu-row">
+      <span class="qm-pu-note">وسائل المساعدة:</span>
+      <button class="qm-pu hafra" id="qm-hafra" onclick="usePU('hafra')">💣 حفرة</button>
+      <button class="qm-pu dagf" id="qm-dagf" onclick="usePU('dagf')">⚡ ضعّف</button>
+      <button class="qm-pu eskot" id="qm-eskot" onclick="usePU('eskot')">🤐 اسكت</button>
+    </div>
+    <div class="timer-wrap">
+      <svg width="80" height="80" viewBox="0 0 80 80">
+        <circle class="t-track" cx="40" cy="40" r="34"/>
+        <circle class="t-prog" id="t-prog" cx="40" cy="40" r="34" stroke="var(--gold)" stroke-dasharray="213.6" stroke-dashoffset="0"/>
+      </svg>
+      <div class="t-num" id="t-num">30</div>
+    </div>
+    <div class="qm-text" id="qm-text">...</div>
+    <div class="opts-grid" id="qm-opts"></div>
+    <div class="qm-actions" id="qm-actions" style="display:none">
+      <button class="btn btn-gold" style="max-width:240px" onclick="closeModal()">▶ التالي</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ RESULT ═══════════ -->
+<div class="screen" id="screen-result">
+  <div class="trophy-big" id="result-trophy">🏆</div>
+  <div class="winner-text" id="result-winner">الفائز!</div>
+  <div class="final-scores">
+    <div class="final-team"><div class="fn" id="res-t1-name">الفريق 1</div><div class="fp" id="res-t1-pts">0</div></div>
+    <div class="final-team"><div class="fn" id="res-t2-name">الفريق 2</div><div class="fp" id="res-t2-pts">0</div></div>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:12px">
+    <button class="btn btn-gold" style="max-width:210px" onclick="showScreen('screen-setup')">🔄 لعبة جديدة</button>
+    <button class="btn btn-ghost" style="max-width:210px" onclick="showScreen('screen-menu')">🏠 القائمة</button>
+  </div>
+</div>
+
+<!-- ═══════════ LEADERBOARD ═══════════ -->
+<div class="screen" id="screen-lb">
+  <div class="user-bar"><div class="ub-title">🏆 المتصدرون</div><button class="btn btn-ghost btn-sm" onclick="showScreen('screen-menu')">← رجوع</button></div>
+  <div class="card" style="margin-top:72px;max-width:500px"><div class="card-title">🏆 أفضل اللاعبين</div><div id="lb-list"></div></div>
+</div>
+
+<!-- ═══════════ ABOUT ═══════════ -->
+<div class="screen" id="screen-about">
+  <div class="user-bar"><div class="ub-title">📖 قواعد اللعبة</div><button class="btn btn-ghost btn-sm" onclick="showScreen('screen-menu')">← رجوع</button></div>
+  <div class="card" style="margin-top:72px;max-width:540px">
+    <div class="card-title">📖 كيف تلعب؟</div>
+    <div style="line-height:2;color:var(--text2);font-size:.9rem">
+      <p style="color:var(--gold);font-weight:700;margin-bottom:5px">⚔️ اللعبة</p>
+      <p>• فريقان يتناوبان على اختيار الأسئلة من اللوحة</p>
+      <p>• 200 نقطة (سهل–30ث) | 400 نقطة (متوسط–60ث) | 600 نقطة (صعب–90ث)</p>
+      <br>
+      <p style="color:var(--gold);font-weight:700;margin-bottom:5px">🃏 وسائل المساعدة (3 لكل فريق)</p>
+      <p>• 💣 <strong>حفرة</strong>: قبل السؤال – إذا أجبت صح تُخصم النقاط من الخصم أيضاً</p>
+      <p>• ⚡ <strong>ضعّف</strong>: قبل السؤال – تضاعف نقاطك إذا أجبت صح</p>
+      <p>• 🤐 <strong>اسكت</strong>: بعد السؤال – إذا أخطأت يُحرم الخصم من الإجابة</p>
+      <br>
+      <p style="color:var(--gold);font-weight:700;margin-bottom:5px">🎓 لعبة الطلاب</p>
+      <p>• اختر الصف الدراسي ثم 6 مواد للعب</p>
+      <p>• الأسئلة من المنهج القطري 2025</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  STARS
+// ══════════════════════════════════════════════════════════
+(function(){const c=document.getElementById('stars');for(let i=0;i<100;i++){const s=document.createElement('div');s.className='star';const z=Math.random()*2.5+.5;s.style.cssText=`width:${z}px;height:${z}px;top:${Math.random()*100}%;left:${Math.random()*100}%;--d:${(Math.random()*4+2).toFixed(1)}s;--delay:${(Math.random()*5).toFixed(1)}s;--op:${(Math.random()*.7+.2).toFixed(2)}`;c.appendChild(s);}})();
+
+// ══════════════════════════════════════════════════════════
+//  CATEGORIES DATA
+// ══════════════════════════════════════════════════════════
+const ALL_CATS=[
+  {id:'تاريخ',    emoji:'📜',label:'التاريخ',        img:'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=300&q=50'},
+  {id:'جغرافيا',  emoji:'🌍',label:'الجغرافيا',      img:'https://images.unsplash.com/photo-1519055548599-6d4d129508c4?w=300&q=50'},
+  {id:'علوم',     emoji:'🔬',label:'العلوم',          img:'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=300&q=50'},
+  {id:'رياضة',    emoji:'⚽',label:'الرياضة',         img:'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=300&q=50'},
+  {id:'فن وثقافة',emoji:'🎨',label:'فن وثقافة',      img:'https://images.unsplash.com/photo-1541367777708-7905fe3296c0?w=300&q=50'},
+  {id:'دين',      emoji:'☪️',label:'الدين',           img:'https://images.unsplash.com/photo-1564769662533-4f00a87b4056?w=300&q=50'},
+  {id:'تقنية',    emoji:'💻',label:'التقنية',         img:'https://images.unsplash.com/photo-1518770660439-4636190af475?w=300&q=50'},
+  {id:'طبيعة',    emoji:'🌿',label:'الطبيعة',         img:'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=300&q=50'},
+  {id:'متنوع',    emoji:'🎲',label:'متنوع',           img:'https://images.unsplash.com/photo-1533294160-0bf3d4da4788?w=300&q=50'},
+  {id:'ليغا',     emoji:'🏟️',label:'الدوري الإسباني',img:'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=300&q=50'},
+  {id:'أبطال',    emoji:'🏆',label:'دوري الأبطال',   img:'https://images.unsplash.com/photo-1551958219-acbc595a1aea?w=300&q=50'},
+  {id:'خرائط',    emoji:'🗺️',label:'خرائط',           img:'https://images.unsplash.com/photo-1524661135-423995f22d0b?w=300&q=50'},
+  {id:'سيرة',     emoji:'📿',label:'السيرة النبوية',  img:'https://images.unsplash.com/photo-1564769625905-50e93615e769?w=300&q=50'},
+  {id:'قطر',      emoji:'🇶🇦',label:'دولة قطر',        img:'https://images.unsplash.com/photo-1567448400815-c92c1c78dac6?w=300&q=50'},
+];
+
+const STUDENT_CATS=[
+  {id:'اجتماعيات',emoji:'🌐',label:'الدراسات الاجتماعية'},
+  {id:'عربي',     emoji:'📝',label:'اللغة العربية'},
+  {id:'اسلامية',  emoji:'☪️',label:'التربية الإسلامية'},
+  {id:'علوم_ط',   emoji:'🔬',label:'العلوم'},
+  {id:'رياضيات',  emoji:'🔢',label:'الرياضيات'},
+  {id:'انجليزي',  emoji:'🔤',label:'اللغة الإنجليزية'},
+  {id:'حاسوب',    emoji:'💻',label:'الحاسوب'},
+  {id:'عامة',     emoji:'🌟',label:'معلومات عامة'},
+  {id:'ثقافة',    emoji:'📖',label:'ثقافة دينية'},
+];
+
+const GRADES=[
+  {num:1,label:'الصف الأول'},
+  {num:2,label:'الصف الثاني'},
+  {num:3,label:'الصف الثالث'},
+  {num:4,label:'الصف الرابع'},
+  {num:5,label:'الصف الخامس'},
+  {num:6,label:'الصف السادس'},
+  {num:7,label:'الصف السابع'},
+  {num:8,label:'الصف الثامن'},
+  {num:9,label:'الصف التاسع'},
+  {num:10,label:'الصف العاشر'},
+  {num:11,label:'الصف الحادي عشر'},
+  {num:12,label:'الصف الثاني عشر'},
+];
+
+const MAX_CATS=6;
+
+// ══════════════════════════════════════════════════════════
+//  QUESTIONS DATABASE – GENERAL
+// ══════════════════════════════════════════════════════════
+const QDB_GENERAL=[
+  // تاريخ
+  {cat:'تاريخ',diff:'easy',q:'في أي عام فُتحت القسطنطينية على يد العثمانيين؟',o:['1453','1389','1517','1299'],a:0},
+  {cat:'تاريخ',diff:'easy',q:'من هو أول من مشى على سطح القمر؟',o:['نيل أرمسترونج','باز ألدرين','يوري غاغارين','جون غلين'],a:0},
+  {cat:'تاريخ',diff:'easy',q:'من هو الفرعون باني الهرم الأكبر؟',o:['خوفو','رمسيس','تحتمس','أخناتون'],a:0},
+  {cat:'تاريخ',diff:'easy',q:'في أي عام أعلن كولومبوس اكتشاف أمريكا؟',o:['1492','1498','1485','1500'],a:0},
+  {cat:'تاريخ',diff:'easy',q:'أين وُلد النبي محمد ﷺ؟',o:['مكة المكرمة','المدينة المنورة','الطائف','اليمن'],a:0},
+  {cat:'تاريخ',diff:'med',q:'في أي عام قامت الثورة الفرنسية؟',o:['1789','1776','1799','1815'],a:0},
+  {cat:'تاريخ',diff:'med',q:'من هو القائد الذي هزم نابليون في واترلو؟',o:['دوق ويلينغتون','هورنيو نيلسون','بلوخر','جان مورو'],a:0},
+  {cat:'تاريخ',diff:'med',q:'في أي عام انتهت الحرب العالمية الثانية؟',o:['1945','1944','1946','1943'],a:0},
+  {cat:'تاريخ',diff:'med',q:'من هو مؤسس الدولة السعودية الأولى؟',o:['محمد بن سعود','عبدالعزيز بن سعود','فيصل بن تركي','محمد علي باشا'],a:0},
+  {cat:'تاريخ',diff:'med',q:'في أي عام تأسست الأمم المتحدة؟',o:['1945','1919','1939','1950'],a:0},
+  {cat:'تاريخ',diff:'hard',q:'من هو الخليفة العباسي الذي بنى مدينة بغداد؟',o:['المنصور','الرشيد','المأمون','المهدي'],a:0},
+  {cat:'تاريخ',diff:'hard',q:'في أي معركة انتصر صلاح الدين عام 1187م؟',o:['حطين','عين جالوت','المنصورة','أرسوف'],a:0},
+  {cat:'تاريخ',diff:'hard',q:'ما الحضارة التي اخترعت الكتابة المسمارية؟',o:['السومرية','البابلية','الفينيقية','الآشورية'],a:0},
+  {cat:'تاريخ',diff:'hard',q:'في أي عام اكتشف البرتغاليون طريق رأس الرجاء الصالح؟',o:['1488','1492','1498','1510'],a:0},
+  {cat:'تاريخ',diff:'hard',q:'من هو أول خليفة في الإسلام بعد وفاة النبي ﷺ؟',o:['أبو بكر الصديق','عمر بن الخطاب','عثمان بن عفان','علي بن أبي طالب'],a:0},
+  // جغرافيا
+  {cat:'جغرافيا',diff:'easy',q:'ما عاصمة المملكة العربية السعودية؟',o:['الرياض','جدة','مكة','المدينة'],a:0},
+  {cat:'جغرافيا',diff:'easy',q:'ما أطول نهر في العالم؟',o:['النيل','الأمازون','المسيسيبي','اليانغتسي'],a:0},
+  {cat:'جغرافيا',diff:'easy',q:'ما أكبر قارة في العالم؟',o:['آسيا','أفريقيا','أمريكا','أوروبا'],a:0},
+  {cat:'جغرافيا',diff:'easy',q:'ما عاصمة دولة قطر؟',o:['الدوحة','الريان','الوكرة','الخور'],a:0},
+  {cat:'جغرافيا',diff:'easy',q:'كم تبلغ مساحة القارة الأفريقية تقريباً؟',o:['30 مليون كم²','20 مليون كم²','40 مليون كم²','15 مليون كم²'],a:0},
+  {cat:'جغرافيا',diff:'med',q:'ما أكبر دولة في العالم مساحةً؟',o:['روسيا','كندا','الصين','الولايات المتحدة'],a:0},
+  {cat:'جغرافيا',diff:'med',q:'ما أكثر دول العالم سكاناً؟',o:['الهند','الصين','الولايات المتحدة','إندونيسيا'],a:0},
+  {cat:'جغرافيا',diff:'med',q:'ما اسم أعلى جبل في العالم؟',o:['إيفرست','K2','كانغشنجونغا','لهوتسي'],a:0},
+  {cat:'جغرافيا',diff:'med',q:'في أي قارة تقع دولة البرازيل؟',o:['أمريكا الجنوبية','أمريكا الشمالية','أفريقيا','أوروبا'],a:0},
+  {cat:'جغرافيا',diff:'med',q:'ما اسم البحر الذي يفصل أوروبا عن أفريقيا؟',o:['البحر الأبيض المتوسط','البحر الأحمر','البحر الأسود','المحيط الأطلسي'],a:0},
+  {cat:'جغرافيا',diff:'hard',q:'ما أعمق بحيرة في العالم؟',o:['بايكال','تنغانيقا','كاسبيان','سبيريور'],a:0},
+  {cat:'جغرافيا',diff:'hard',q:'ما عاصمة أستراليا؟',o:['كانبيرا','سيدني','ملبورن','بريزبن'],a:0},
+  {cat:'جغرافيا',diff:'hard',q:'ما أصغر دولة في العالم مساحةً؟',o:['الفاتيكان','موناكو','سان مارينو','ليختنشتاين'],a:0},
+  {cat:'جغرافيا',diff:'hard',q:'في أي محيط تقع جزيرة مدغشقر؟',o:['المحيط الهندي','المحيط الأطلسي','المحيط الهادئ','المحيط المتجمد'],a:0},
+  {cat:'جغرافيا',diff:'hard',q:'ما اسم أطول سلسلة جبلية في العالم؟',o:['جبال الأنديز','جبال الهيمالايا','جبال الألب','جبال الأورال'],a:0},
+  // علوم
+  {cat:'علوم',diff:'easy',q:'ما رمز الذهب في الجدول الدوري؟',o:['Au','Go','Gd','Ag'],a:0},
+  {cat:'علوم',diff:'easy',q:'كم عدد عظام الإنسان البالغ؟',o:['206','200','212','198'],a:0},
+  {cat:'علوم',diff:'easy',q:'ما أسرع حيوان بري؟',o:['الفهد','الأسد','النمر','الحصان'],a:0},
+  {cat:'علوم',diff:'easy',q:'ما أكبر حيوان في العالم؟',o:['الحوت الأزرق','الفيل','الزرافة','القرش الأبيض'],a:0},
+  {cat:'علوم',diff:'easy',q:'كم عدد أقدام الحشرات؟',o:['6','8','4','10'],a:0},
+  {cat:'علوم',diff:'med',q:'من اكتشف قانون الجاذبية؟',o:['إسحاق نيوتن','غاليليو','أينشتاين','كبلر'],a:0},
+  {cat:'علوم',diff:'med',q:'كم سرعة الضوء تقريباً؟',o:['300,000 كم/ث','150,000 كم/ث','500,000 كم/ث','100,000 كم/ث'],a:0},
+  {cat:'علوم',diff:'med',q:'ما العنصر الأكثر وفرة في قشرة الأرض؟',o:['الأكسجين','السيليكون','الألومنيوم','الحديد'],a:0},
+  {cat:'علوم',diff:'med',q:'ما العضو الذي يُنتج الأنسولين في الجسم؟',o:['البنكرياس','الكبد','الكلية','القلب'],a:0},
+  {cat:'علوم',diff:'med',q:'ما العملية التي تصنع فيها النباتات غذاءها؟',o:['البناء الضوئي','التنفس الخلوي','التخمر','الأيض'],a:0},
+  {cat:'علوم',diff:'hard',q:'كم عدد كروموسومات الإنسان؟',o:['46','48','44','42'],a:0},
+  {cat:'علوم',diff:'hard',q:'ما أثقل عنصر في الجدول الدوري؟',o:['أوغانيسون','أورانيوم','بلوتونيوم','رادون'],a:0},
+  {cat:'علوم',diff:'hard',q:'ما عملية تحول الجليد مباشرةً لبخار؟',o:['التسامي','التبخر','التقطير','الانصهار'],a:0},
+  {cat:'علوم',diff:'hard',q:'كم يبلغ عمر الأرض تقريباً؟',o:['4.5 مليار سنة','2 مليار سنة','6 مليار سنة','1 مليار سنة'],a:0},
+  {cat:'علوم',diff:'hard',q:'ما أعمق نقطة في محيطات العالم؟',o:['خندق ماريانا','بورتوريكو','جاوة','تيرا نوفا'],a:0},
+  // رياضة
+  {cat:'رياضة',diff:'easy',q:'كم عدد لاعبي كرة القدم في الفريق؟',o:['11','10','12','9'],a:0},
+  {cat:'رياضة',diff:'easy',q:'كم مدة مباراة كرة القدم الرسمية؟',o:['90 دقيقة','80 دقيقة','60 دقيقة','100 دقيقة'],a:0},
+  {cat:'رياضة',diff:'easy',q:'في أي رياضة تُستخدم مضرب وريشة؟',o:['البادمنتون','التنس','الإسكواش','بينغ بونغ'],a:0},
+  {cat:'رياضة',diff:'easy',q:'في أي مدينة أُقيمت أولمبياد صيف 2024؟',o:['باريس','طوكيو','لندن','ريو'],a:0},
+  {cat:'رياضة',diff:'easy',q:'ما رياضة لويس هاميلتون؟',o:['الفورمولا 1','التنس','كرة القدم','السباحة'],a:0},
+  {cat:'رياضة',diff:'med',q:'ما البطولة الأوروبية الكبرى للأندية؟',o:['دوري أبطال أوروبا','الدوري الأوروبي','كأس العالم','يورو'],a:0},
+  {cat:'رياضة',diff:'med',q:'كم مرة فازت البرازيل بكأس العالم؟',o:['5 مرات','4 مرات','6 مرات','3 مرات'],a:0},
+  {cat:'رياضة',diff:'med',q:'ما رياضة لاعب المضرب روجر فيدرر؟',o:['التنس','إسكواش','البادمنتون','كرة الطاولة'],a:0},
+  {cat:'رياضة',diff:'med',q:'في أي عام كان أول كأس عالم لكرة القدم؟',o:['1930','1920','1934','1938'],a:0},
+  {cat:'رياضة',diff:'med',q:'ما عدد أطواق رمز الألعاب الأولمبية؟',o:['5','4','6','3'],a:0},
+  {cat:'رياضة',diff:'hard',q:'من هو الأكثر تسجيلاً دولياً في تاريخ كرة القدم؟',o:['كريستيانو رونالدو','ميسي','بيليه','رونالدو البرازيلي'],a:0},
+  {cat:'رياضة',diff:'hard',q:'ما عدد الرياضات في أولمبياد باريس 2024؟',o:['32','28','30','36'],a:0},
+  {cat:'رياضة',diff:'hard',q:'من هو صاحب أكثر ألقاب كأس العالم كلاعب؟',o:['بيليه','مارادونا','زيدان','رونالدو'],a:0},
+  // فن وثقافة
+  {cat:'فن وثقافة',diff:'easy',q:'من رسم لوحة الموناليزا؟',o:['ليوناردو دافنشي','ميكيلانجيلو','رافاييل','بيكاسو'],a:0},
+  {cat:'فن وثقافة',diff:'easy',q:'من ألّف مسرحية هاملت؟',o:['شكسبير','موليير','تشيخوف','إبسن'],a:0},
+  {cat:'فن وثقافة',diff:'med',q:'من ألّف رواية «البؤساء»؟',o:['فيكتور هوغو','فولتير','دوستويفسكي','تولستوي'],a:0},
+  {cat:'فن وثقافة',diff:'med',q:'من رسم لوحة «ليلة النجوم»؟',o:['فان غوخ','مونيه','رمبرانت','دالي'],a:0},
+  {cat:'فن وثقافة',diff:'hard',q:'من كتب «مئة عام من العزلة»؟',o:['غارسيا ماركيز','بورخيس','نيرودا','الليندي'],a:0},
+  {cat:'فن وثقافة',diff:'hard',q:'في أي مدينة يوجد متحف اللوفر؟',o:['باريس','لندن','روما','مدريد'],a:0},
+  // دين
+  {cat:'دين',diff:'easy',q:'كم عدد أركان الإسلام؟',o:['5','6','4','7'],a:0},
+  {cat:'دين',diff:'easy',q:'ما أول سورة في القرآن؟',o:['الفاتحة','البقرة','الإخلاص','الناس'],a:0},
+  {cat:'دين',diff:'easy',q:'في أي شهر نزل القرآن؟',o:['رمضان','شعبان','محرم','ذو الحجة'],a:0},
+  {cat:'دين',diff:'med',q:'كم عدد سور القرآن الكريم؟',o:['114','120','110','100'],a:0},
+  {cat:'دين',diff:'med',q:'من هو أول مؤذن في الإسلام؟',o:['بلال بن رباح','أبو بكر','عمر','علي'],a:0},
+  {cat:'دين',diff:'hard',q:'كم عدد الأنبياء المذكورين في القرآن؟',o:['25','20','30','28'],a:0},
+  {cat:'دين',diff:'hard',q:'ما أطول سورة في القرآن؟',o:['البقرة','آل عمران','النساء','المائدة'],a:0},
+  // تقنية
+  {cat:'تقنية',diff:'easy',q:'من هو مؤسس شركة Apple؟',o:['ستيف جوبز','بيل غيتس','إيلون ماسك','مارك زوكربرغ'],a:0},
+  {cat:'تقنية',diff:'easy',q:'ما معنى CPU؟',o:['وحدة المعالجة المركزية','بطاقة الشبكة','ذاكرة عشوائية','وحدة تخزين'],a:0},
+  {cat:'تقنية',diff:'med',q:'من اخترع شبكة الويب WWW؟',o:['تيم بيرنرز لي','بيل غيتس','ستيف جوبز','فينت سيرف'],a:0},
+  {cat:'تقنية',diff:'med',q:'في أي عام تأسست Google؟',o:['1998','1995','2000','2004'],a:0},
+  {cat:'تقنية',diff:'hard',q:'ما لغة البرمجة التي بُنيت عليها أنظمة Unix الأولى؟',o:['C','Assembly','FORTRAN','COBOL'],a:0},
+  // طبيعة
+  {cat:'طبيعة',diff:'easy',q:'ما أكبر حيوان في العالم؟',o:['الحوت الأزرق','الفيل','الزرافة','القرش'],a:0},
+  {cat:'طبيعة',diff:'med',q:'ما أكبر غابة استوائية في العالم؟',o:['غابة الأمازون','الكونغو','تيغا','دينتري'],a:0},
+  {cat:'طبيعة',diff:'hard',q:'ما اسم أعمق نقطة في المحيطات؟',o:['خندق ماريانا','بورتوريكو','جاوة','تيرا نوفا'],a:0},
+  // متنوع
+  {cat:'متنوع',diff:'easy',q:'كم عدد أيام السنة الكبيسة؟',o:['366','365','367','364'],a:0},
+  {cat:'متنوع',diff:'easy',q:'ما ناتج خلط الأزرق والأصفر؟',o:['الأخضر','البنفسجي','البرتقالي','الرمادي'],a:0},
+  {cat:'متنوع',diff:'med',q:'ما أكثر لغات العالم انتشاراً كلغة أم؟',o:['الصينية الماندارية','الإنجليزية','الإسبانية','العربية'],a:0},
+  {cat:'متنوع',diff:'hard',q:'في أي عام انتهت الحرب العالمية الثانية؟',o:['1945','1944','1946','1943'],a:0},
+  // الدوري الإسباني
+  {cat:'ليغا',diff:'easy',q:'ما اسم بطولة الدوري الإسباني رسمياً؟',o:['لاليغا','الدوري الممتاز','البريميرا','سيريا A'],a:0},
+  {cat:'ليغا',diff:'easy',q:'ما نادي كريستيانو رونالدو السابق في إسبانيا؟',o:['ريال مدريد','برشلونة','أتلتيكو مدريد','فالنسيا'],a:0},
+  {cat:'ليغا',diff:'easy',q:'من هو أكثر هدافي الدوري الإسباني تاريخياً؟',o:['ليونيل ميسي','رونالدو','رائول','إيتور مورينتيس'],a:0},
+  {cat:'ليغا',diff:'med',q:'كم مرة فاز ريال مدريد بالدوري الإسباني حتى 2024؟',o:['36','30','28','34'],a:0},
+  {cat:'ليغا',diff:'med',q:'في أي مدينة يلعب برشلونة مبارياته الرسمية؟',o:['برشلونة','مدريد','إشبيلية','بلنسية'],a:0},
+  {cat:'ليغا',diff:'med',q:'ما اسم ملعب ريال مدريد؟',o:['سانتياغو بيرنابيو','كامب نو','مترو بوليتانو','بنيتو فيامارين'],a:0},
+  {cat:'ليغا',diff:'hard',q:'من هو أكثر مدربي الدوري الإسباني ألقاباً؟',o:['ميغيل موينيوس','يوهان كرويف','كارلو أنشيلوتي','زين الدين زيدان'],a:0},
+  {cat:'ليغا',diff:'hard',q:'في أي موسم سجل ميسي 50 هدفاً في الليغا؟',o:['2011-2012','2010-2011','2012-2013','2014-2015'],a:0},
+  // دوري الأبطال
+  {cat:'أبطال',diff:'easy',q:'ما اسم بطولة دوري أبطال أوروبا سابقاً؟',o:['كأس الأندية الأوروبية','كأس الاتحاد','سوبر كأس','الكأس الأوروبية'],a:0},
+  {cat:'أبطال',diff:'easy',q:'من هو النادي الأكثر فوزاً بدوري الأبطال؟',o:['ريال مدريد','ميلان','ليفربول','بايرن ميونيخ'],a:0},
+  {cat:'أبطال',diff:'easy',q:'ما لون كأس دوري أبطال أوروبا؟',o:['ذهبي','فضي','برونزي','أبيض'],a:0},
+  {cat:'أبطال',diff:'med',q:'كم مرة فاز ريال مدريد بدوري الأبطال حتى 2024؟',o:['15','13','12','14'],a:0},
+  {cat:'أبطال',diff:'med',q:'في أي مدينة يُقام نهائي دوري الأبطال 2024؟',o:['لندن','مدريد','باريس','ميونيخ'],a:0},
+  {cat:'أبطال',diff:'med',q:'من فاز بدوري الأبطال موسم 2022-2023؟',o:['مانشستر سيتي','ريال مدريد','إنتر ميلان','ميلان'],a:0},
+  {cat:'أبطال',diff:'hard',q:'من هو أكثر هدافي تاريخ دوري الأبطال؟',o:['كريستيانو رونالدو','ليونيل ميسي','راؤول غونزاليس','رائول'],a:0},
+  {cat:'أبطال',diff:'hard',q:'ما أكبر فوز في تاريخ دوري الأبطال؟',o:['ريال مدريد 8-0 مالمو','برشلونة 7-0 بايرن','ليفربول 8-0 بيسيكتاش','باريس 7-1 بازل'],a:0},
+  // خرائط
+  {cat:'خرائط',diff:'easy',q:'ما الخط الوهمي الذي يقسم الأرض إلى نصفين؟',o:['خط الاستواء','مدار السرطان','مدار الجدي','خط غرينتش'],a:0},
+  {cat:'خرائط',diff:'easy',q:'كم عدد قارات العالم؟',o:['7','6','8','5'],a:0},
+  {cat:'خرائط',diff:'easy',q:'ما أكبر محيط في العالم؟',o:['المحيط الهادئ','الأطلسي','الهندي','المتجمد الشمالي'],a:0},
+  {cat:'خرائط',diff:'med',q:'ما الدولة التي تمتد على قارتين؟',o:['تركيا','روسيا','مصر','إسبانيا'],a:0},
+  {cat:'خرائط',diff:'med',q:'ما خط الطول الذي يمر عبر مدينة غرينتش؟',o:['صفر درجة','180 درجة','90 شرق','90 غرب'],a:0},
+  {cat:'خرائط',diff:'med',q:'ما الدولة الأكثر جزراً في العالم؟',o:['السويد','اليونان','إندونيسيا','الفلبين'],a:0},
+  {cat:'خرائط',diff:'hard',q:'ما اسم الخريطة التي وضعها العالم إدريسي؟',o:['نزهة المشتاق','كتاب الجغرافيا','صورة الأرض','مسالك الممالك'],a:0},
+  {cat:'خرائط',diff:'hard',q:'ما الإسقاط الخرائطي الأكثر استخداماً في الملاحة البحرية؟',o:['إسقاط ميركاتور','إسقاط بيترز','إسقاط رباعي','إسقاط مخروطي'],a:0},
+  // السيرة النبوية
+  {cat:'سيرة',diff:'easy',q:'في أي مدينة وُلد النبي محمد ﷺ؟',o:['مكة المكرمة','المدينة المنورة','الطائف','اليمن'],a:0},
+  {cat:'سيرة',diff:'easy',q:'ما اسم أول زوجة للنبي ﷺ؟',o:['خديجة بنت خويلد','عائشة','حفصة','زينب'],a:0},
+  {cat:'سيرة',diff:'easy',q:'في أي غار نزل الوحي على النبي ﷺ أول مرة؟',o:['غار حراء','غار ثور','غار الرقيم','غار أصحاب الكهف'],a:0},
+  {cat:'سيرة',diff:'med',q:'كم عدد غزوات النبي ﷺ التي شارك فيها شخصياً؟',o:['27','20','30','17'],a:0},
+  {cat:'سيرة',diff:'med',q:'في أي عام هاجر النبي ﷺ إلى المدينة؟',o:['622م','615م','630م','610م'],a:0},
+  {cat:'سيرة',diff:'med',q:'ما اسم أول شهيد في الإسلام؟',o:['سمية بنت خياط','بلال','ياسر','حمزة'],a:0},
+  {cat:'سيرة',diff:'hard',q:'ما اسم معركة حدثت في السنة الثانية من الهجرة؟',o:['بدر','أحد','الخندق','تبوك'],a:0},
+  {cat:'سيرة',diff:'hard',q:'كم عدد أبناء النبي ﷺ الذين أكملوا الكبر؟',o:['لا أحد','واحد','اثنان','ثلاثة'],a:0},
+  // قطر
+  {cat:'قطر',diff:'easy',q:'ما عاصمة دولة قطر؟',o:['الدوحة','الريان','الوكرة','الخور'],a:0},
+  {cat:'قطر',diff:'easy',q:'في أي خليج تقع قطر؟',o:['الخليج العربي','خليج عدن','خليج عُمان','البحر الأحمر'],a:0},
+  {cat:'قطر',diff:'easy',q:'ما عملة دولة قطر؟',o:['الريال القطري','الدرهم','الدينار','الجنيه'],a:0},
+  {cat:'قطر',diff:'easy',q:'ما رمز مونديال قطر 2022؟',o:['La\'eeb','Al-Rihla','Thumper','Star'],a:0},
+  {cat:'قطر',diff:'med',q:'في أي عام استضافت قطر كأس العالم؟',o:['2022','2018','2026','2014'],a:0},
+  {cat:'قطر',diff:'med',q:'ما اسم النادي القطري الأكثر فوزاً بالدوري القطري؟',o:['الدحيل','السد','الغرافة','الريان'],a:0},
+  {cat:'قطر',diff:'med',q:'ما اسم شركة الطيران الوطنية القطرية؟',o:['الخطوط الجوية القطرية','الخطوط القطرية','طيران قطر','العربية قطر'],a:0},
+  {cat:'قطر',diff:'hard',q:'في أي عام انضمت قطر إلى مجلس التعاون الخليجي؟',o:['1981','1971','1990','1995'],a:0},
+  {cat:'قطر',diff:'hard',q:'ما اسم الجزيرة الاصطناعية الشهيرة في قطر؟',o:['جزيرة اللؤلؤة','جزيرة النخلة','جزيرة الذهب','جزيرة السعادة'],a:0},
+];
+
+// ══════════════════════════════════════════════════════════
+//  STUDENT QUESTIONS DATABASE – GRADE 5 AS SAMPLE
+//  (70+ questions per subject per grade)
+// ══════════════════════════════════════════════════════════
+const QDB_STUDENT={};
+
+// Grade 5 – complete
+QDB_STUDENT[5]={
+  'اجتماعيات':[
+    {diff:'easy',q:'ما اسم الجزيرة العربية الكبرى التي تقع فيها المملكة العربية السعودية؟',o:['شبه الجزيرة العربية','جزيرة العرب','الجزيرة الذهبية','شبه جزيرة سيناء'],a:0},
+    {diff:'easy',q:'ما الدولة التي كانت تُسمى بلاد الرافدين؟',o:['العراق','سوريا','مصر','الأردن'],a:0},
+    {diff:'easy',q:'ما اسم النهر الذي يمر بمصر؟',o:['النيل','الفرات','دجلة','الأردن'],a:0},
+    {diff:'easy',q:'كم عدد دول مجلس التعاون الخليجي؟',o:['6','5','7','8'],a:0},
+    {diff:'easy',q:'ما عاصمة الإمارات العربية المتحدة؟',o:['أبوظبي','دبي','الشارقة','عجمان'],a:0},
+    {diff:'easy',q:'ما أكبر دولة عربية مساحةً؟',o:['الجزائر','السعودية','السودان','ليبيا'],a:0},
+    {diff:'easy',q:'في أي قارة تقع معظم الدول العربية؟',o:['آسيا وأفريقيا','أفريقيا فقط','آسيا فقط','أوروبا'],a:0},
+    {diff:'easy',q:'ما اسم البحر الذي يفصل شبه الجزيرة العربية عن أفريقيا؟',o:['البحر الأحمر','المتوسط','العربي','قزوين'],a:0},
+    {diff:'easy',q:'ما اسم الخليج المحاذي لدولة قطر؟',o:['الخليج العربي','خليج عدن','خليج عُمان','خليج السويس'],a:0},
+    {diff:'easy',q:'ما عاصمة الكويت؟',o:['الكويت','الجهراء','حولي','الأحمدي'],a:0},
+    {diff:'med',q:'ما أهم موارد اقتصاد دول الخليج العربي؟',o:['النفط والغاز','الزراعة','السياحة','الصناعة'],a:0},
+    {diff:'med',q:'من أسس مجلس التعاون الخليجي عام 1981م؟',o:['ملوك ورؤساء دول الخليج الست','جامعة الدول العربية','الأمم المتحدة','دول عربية منتجة للنفط'],a:0},
+    {diff:'med',q:'ما أطول نهر في القارة الأفريقية؟',o:['النيل','الكونغو','النيجر','زامبيزي'],a:0},
+    {diff:'med',q:'ما اسم الصحراء الكبرى التي تغطي شمال أفريقيا؟',o:['الصحراء الكبرى','صحراء الربع الخالي','النفود','الدهناء'],a:0},
+    {diff:'med',q:'ما اسم أكبر صحراء في شبه الجزيرة العربية؟',o:['الربع الخالي','النفود','الدهناء','جدة'],a:0},
+    {diff:'med',q:'ما الدولة التي تشارك قطر حدودها البرية الوحيدة؟',o:['المملكة العربية السعودية','الإمارات','البحرين','الكويت'],a:0},
+    {diff:'med',q:'ما اسم عاصمة البحرين؟',o:['المنامة','المحرق','الرفاع','سترة'],a:0},
+    {diff:'med',q:'ما اسم الممر المائي الذي يربط الخليج بخليج عُمان؟',o:['مضيق هرمز','باب المندب','قناة السويس','مضيق جبل طارق'],a:0},
+    {diff:'hard',q:'ما اسم أول دستور في تاريخ الدولة القطرية؟',o:['دستور 2003','النظام الأساسي 1970','المرسوم الأميري 1995','ميثاق 1972'],a:0},
+    {diff:'hard',q:'ما أهم عوامل قيام الحضارات القديمة؟',o:['الأنهار والمياه','الجبال','الصحاري','البحار'],a:0},
+    {diff:'hard',q:'ما اسم السد الذي بُني في مصر على النيل؟',o:['السد العالي','سد النهضة','سد مروي','سد تيشرين'],a:0},
+  ],
+  'عربي':[
+    {diff:'easy',q:'ما الحرف الذي يأتي بعد «الدال» في الهجاء العربي؟',o:['الذال','الراء','الزاي','السين'],a:0},
+    {diff:'easy',q:'ما جمع كلمة «كتاب»؟',o:['كُتُب','كِتَاب','كاتبون','مكتبة'],a:0},
+    {diff:'easy',q:'ما مؤنث كلمة «معلم»؟',o:['معلمة','معلمات','تعليم','معلم'],a:0},
+    {diff:'easy',q:'ما ضد كلمة «الليل»؟',o:['النهار','الصباح','المساء','الفجر'],a:0},
+    {diff:'easy',q:'كم حرفاً في اللغة العربية؟',o:['28','26','30','24'],a:0},
+    {diff:'easy',q:'ما علامة الاستفهام الصحيحة بالعربية؟',o:['؟','!','.','،'],a:0},
+    {diff:'easy',q:'ما المصدر من الفعل «كتب»؟',o:['كتابة','كاتب','مكتوب','يكتب'],a:0},
+    {diff:'easy',q:'ما اسم العلامة «،» في اللغة العربية؟',o:['فاصلة','نقطة','فاصلة منقوطة','شرطة'],a:0},
+    {diff:'easy',q:'ما جمع كلمة «قلم»؟',o:['أقلام','قلوم','قلمات','أقالم'],a:0},
+    {diff:'easy',q:'ما ضد كلمة «الحر»؟',o:['البرد','الدفء','الصيف','الشتاء'],a:0},
+    {diff:'med',q:'ما الفعل المضارع من «ذهب»؟',o:['يذهب','ذاهب','مذهوب','ذهاب'],a:0},
+    {diff:'med',q:'ما اسم الحالة الإعرابية عندما يكون الاسم مبتدأ؟',o:['الرفع','النصب','الجر','الجزم'],a:0},
+    {diff:'med',q:'ما جمع كلمة «مدرسة»؟',o:['مدارس','مدرسات','مدرستان','مدرستين'],a:0},
+    {diff:'med',q:'ما الفرق بين الفعل الماضي والمضارع؟',o:['الماضي انتهى والمضارع يحدث الآن','الماضي للمستقبل والمضارع للحاضر','لا فرق بينهما','الماضي مؤنث والمضارع مذكر'],a:0},
+    {diff:'med',q:'ما علامة التنوين بالفتح؟',o:['فتحتان','ضمتان','كسرتان','شدة'],a:0},
+    {diff:'med',q:'ما اسم الضمير المستتر في الجملة: «أكلتُ التفاحة»؟',o:['أنا','هو','هي','أنت'],a:0},
+    {diff:'med',q:'ما مفرد كلمة «أشجار»؟',o:['شجرة','شجر','شجرات','أشجارة'],a:0},
+    {diff:'hard',q:'ما اسم علامة الإعراب في آخر الاسم المجرور بحرف الجر؟',o:['الكسرة','الضمة','الفتحة','السكون'],a:0},
+    {diff:'hard',q:'ما أنواع الجمع في اللغة العربية؟',o:['مذكر سالم ومؤنث سالم وتكسير','مذكر ومؤنث فقط','مفرد ومثنى فقط','منتظم وغير منتظم'],a:0},
+    {diff:'hard',q:'ما الفعل اللازم؟',o:['فعل لا يحتاج مفعولاً به','فعل يحتاج مفعولاً به','فعل ماضٍ دائماً','فعل في المضارع فقط'],a:0},
+    {diff:'hard',q:'ما اسم الأسلوب الذي يُعبّر عن مدح أو ذم؟',o:['أسلوب المدح والذم','أسلوب الاستفهام','أسلوب الشرط','أسلوب النداء'],a:0},
+  ],
+  'اسلامية':[
+    {diff:'easy',q:'كم عدد أركان الإسلام؟',o:['5','4','6','7'],a:0},
+    {diff:'easy',q:'ما أول ركن من أركان الإسلام؟',o:['الشهادتان','الصلاة','الزكاة','الصوم'],a:0},
+    {diff:'easy',q:'كم عدد الصلوات المفروضة في اليوم؟',o:['5','3','4','6'],a:0},
+    {diff:'easy',q:'ما عدد ركعات صلاة الفجر؟',o:['2','3','4','1'],a:0},
+    {diff:'easy',q:'في أي شهر يصوم المسلمون؟',o:['رمضان','شعبان','محرم','ذو القعدة'],a:0},
+    {diff:'easy',q:'ما الكتاب المقدس للمسلمين؟',o:['القرآن الكريم','التوراة','الإنجيل','الزبور'],a:0},
+    {diff:'easy',q:'كم عدد أركان الإيمان؟',o:['6','5','4','7'],a:0},
+    {diff:'easy',q:'ما ركن الإسلام الخامس؟',o:['الحج','الصوم','الزكاة','الصلاة'],a:0},
+    {diff:'easy',q:'ما اسم أول سورة في القرآن الكريم؟',o:['الفاتحة','البقرة','الإخلاص','النصر'],a:0},
+    {diff:'easy',q:'ما عدد ركعات صلاة الظهر؟',o:['4','2','3','5'],a:0},
+    {diff:'med',q:'ما أركان الصلاة؟',o:['النية والقيام والركوع والسجود والتشهد','النية فقط','القيام والركوع فقط','التكبير والتسليم'],a:0},
+    {diff:'med',q:'من هو النبي الذي بنى الكعبة المشرفة مع ولده؟',o:['إبراهيم عليه السلام','نوح','موسى','عيسى'],a:0},
+    {diff:'med',q:'ما حكم الصلاة في الإسلام؟',o:['فرض عين','سنة مؤكدة','فرض كفاية','واجب'],a:0},
+    {diff:'med',q:'ما شروط الزكاة الواجبة؟',o:['النصاب وحول الحول','العمل والنية فقط','الإسلام فقط','الغنى فقط'],a:0},
+    {diff:'med',q:'كم عدد سور القرآن الكريم؟',o:['114','100','120','130'],a:0},
+    {diff:'med',q:'ما اسم أطول سورة في القرآن الكريم؟',o:['البقرة','آل عمران','النساء','يوسف'],a:0},
+    {diff:'med',q:'ما خصائص الأخلاق الإسلامية؟',o:['الشمول والثبات والواقعية','السهولة فقط','الصعوبة','الاختيارية'],a:0},
+    {diff:'hard',q:'ما أنواع الأحكام الشرعية في الفقه الإسلامي؟',o:['واجب ومندوب ومباح ومكروه وحرام','حلال وحرام فقط','جائز وممنوع','واجب وحرام'],a:0},
+    {diff:'hard',q:'ما مصادر الشريعة الإسلامية بالترتيب؟',o:['القرآن ثم السنة ثم الإجماع ثم القياس','السنة ثم القرآن','القياس أولاً','الإجماع أولاً'],a:0},
+    {diff:'hard',q:'ما حكم الجمع بين الصلاتين في السفر؟',o:['جائز','حرام','واجب','مكروه'],a:0},
+    {diff:'hard',q:'ما الفرق بين الفرض والواجب عند الحنفية؟',o:['الفرض ثبت بقطعي والواجب بظني','لا فرق','الواجب أقوى','الفرض أضعف'],a:0},
+  ],
+  'علوم_ط':[
+    {diff:'easy',q:'ما الغاز الذي يتنفسه الإنسان؟',o:['الأكسجين','ثاني أكسيد الكربون','النيتروجين','الهيدروجين'],a:0},
+    {diff:'easy',q:'ما الغاز الذي تنتجه النباتات؟',o:['الأكسجين','ثاني أكسيد الكربون','البخار','النيتروجين'],a:0},
+    {diff:'easy',q:'كم عدد أجهزة جسم الإنسان الرئيسية؟',o:['11','8','15','6'],a:0},
+    {diff:'easy',q:'ما الجهاز الذي يقوم بضخ الدم في جسم الإنسان؟',o:['الجهاز الدوري','التنفسي','الهضمي','العصبي'],a:0},
+    {diff:'easy',q:'ما الذي تعمله النباتات في عملية البناء الضوئي؟',o:['تصنع غذاءها باستخدام الضوء','تتنفس الهواء','تمتص الماء فقط','تنمو فقط'],a:0},
+    {diff:'easy',q:'ما الحيوان الذي يُنتج العسل؟',o:['النحل','الفراشة','الدودة','النملة'],a:0},
+    {diff:'easy',q:'ما أكبر كوكب في المجموعة الشمسية؟',o:['المشتري','زحل','أورانوس','نبتون'],a:0},
+    {diff:'easy',q:'كم يوماً تستغرق الأرض في دورة كاملة حول الشمس؟',o:['365','360','366','364'],a:0},
+    {diff:'easy',q:'ما الكوكب الأقرب للشمس؟',o:['عطارد','الزهرة','الأرض','المريخ'],a:0},
+    {diff:'easy',q:'ما وحدة قياس الحرارة الشائعة؟',o:['الدرجة المئوية','المتر','الكيلوغرام','الثانية'],a:0},
+    {diff:'med',q:'ما مراحل دورة حياة الفراشة؟',o:['بيضة ← يرقة ← شرنقة ← فراشة','بيضة ← فراشة','يرقة ← فراشة ← بيضة','شرنقة ← بيضة'],a:0},
+    {diff:'med',q:'ما الفرق بين الكائنات الحية والجامدة؟',o:['الحية تتنفس وتتكاثر والجامدة لا','الحية لها لون','الجامدة أكبر حجماً','لا فرق'],a:0},
+    {diff:'med',q:'ما اسم العملية التي تتحول فيها المادة من الصلب إلى السائل؟',o:['الانصهار','التجمد','التبخر','التكثف'],a:0},
+    {diff:'med',q:'ما الخاصية التي تجعل الماء ينتشر على السطح؟',o:['التوتر السطحي','اللزوجة','الكثافة','درجة الغليان'],a:0},
+    {diff:'med',q:'ما أنواع الصخور الثلاثة؟',o:['نارية ورسوبية ومتحولة','ناعمة وخشنة وصلبة','بركانية وصحراوية وبحرية','قاسية وطرية'],a:0},
+    {diff:'med',q:'ما الفيتامين الذي يمنحه ضوء الشمس؟',o:['فيتامين D','فيتامين C','فيتامين A','فيتامين B'],a:0},
+    {diff:'med',q:'كم يبلغ عدد كواكب المجموعة الشمسية؟',o:['8','9','7','10'],a:0},
+    {diff:'hard',q:'ما وظيفة الميتوكوندريا في الخلية؟',o:['إنتاج الطاقة','الحفاظ على شكل الخلية','تخزين الغذاء','التكاثر'],a:0},
+    {diff:'hard',q:'ما القانون الذي يصف حركة الكواكب حول الشمس؟',o:['قوانين كبلر','قانون نيوتن','قانون أرخميدس','قانون أوم'],a:0},
+    {diff:'hard',q:'ما الفرق بين الخلية النباتية والحيوانية؟',o:['النباتية تحتوي جداراً خلوياً وبلاستيدات','الحيوانية أكبر','لا فرق','النباتية لها نواة والحيوانية لا'],a:0},
+    {diff:'hard',q:'ما اسم العالم الذي وضع النظرية الذرية الحديثة؟',o:['نيلز بور','دالتون','رذرفورد','تومسون'],a:0},
+  ],
+  'رياضيات':[
+    {diff:'easy',q:'كم ناتج 7 × 8؟',o:['56','54','58','52'],a:0},
+    {diff:'easy',q:'ما ناتج 100 ÷ 4؟',o:['25','20','30','15'],a:0},
+    {diff:'easy',q:'كم يساوي 1000 + 999؟',o:['1999','1998','2001','2000'],a:0},
+    {diff:'easy',q:'ما الكسر المكافئ لـ 1/2؟',o:['2/4','1/3','3/8','2/5'],a:0},
+    {diff:'easy',q:'ما مساحة المربع الذي طول ضلعه 5 سم؟',o:['25 سم²','20 سم²','15 سم²','10 سم²'],a:0},
+    {diff:'easy',q:'كم زاوية في المثلث؟',o:['3','4','2','5'],a:0},
+    {diff:'easy',q:'ما ناتج 15 × 10؟',o:['150','140','160','130'],a:0},
+    {diff:'easy',q:'ما الرقم الفردي من التالية؟',o:['7','8','10','12'],a:0},
+    {diff:'easy',q:'ما مجموع زوايا المثلث؟',o:['180°','360°','90°','270°'],a:0},
+    {diff:'easy',q:'ما ناتج 250 - 75؟',o:['175','165','185','195'],a:0},
+    {diff:'med',q:'ما ناتج 3/4 + 1/4؟',o:['1','1/2','3/8','4/4'],a:0},
+    {diff:'med',q:'إذا كان محيط المربع 20 سم فما طول ضلعه؟',o:['5 سم','4 سم','10 سم','20 سم'],a:0},
+    {diff:'med',q:'ما ناتج 2.5 × 4؟',o:['10','8','12','9'],a:0},
+    {diff:'med',q:'ما نسبة 3 من 12؟',o:['25%','30%','20%','35%'],a:0},
+    {diff:'med',q:'ما العدد الأولي من التالية؟',o:['7','9','15','21'],a:0},
+    {diff:'med',q:'ما ناتج (12 + 8) × 3؟',o:['60','54','66','72'],a:0},
+    {diff:'med',q:'ما مساحة المستطيل الذي طوله 8 وعرضه 5؟',o:['40 وحدة²','26 وحدة²','35 وحدة²','45 وحدة²'],a:0},
+    {diff:'hard',q:'ما ناتج 1234 × 6؟',o:['7404','7044','7440','7004'],a:0},
+    {diff:'hard',q:'إذا كان 40% من عدد = 80، ما هو العدد؟',o:['200','160','220','180'],a:0},
+    {diff:'hard',q:'ما الحجم الكلي للمكعب الذي طول حرفه 4 سم؟',o:['64 سم³','48 سم³','32 سم³','16 سم³'],a:0},
+    {diff:'hard',q:'ما ناتج 5/6 × 3/10 مختزلاً؟',o:['1/4','1/2','3/20','5/18'],a:0},
+  ],
+  'انجليزي':[
+    {diff:'easy',q:'What is the capital of England?',o:['London','Paris','Berlin','Rome'],a:0},
+    {diff:'easy',q:'Which word means the opposite of "big"?',o:['Small','Tall','Heavy','Long'],a:0},
+    {diff:'easy',q:'How many letters are in the English alphabet?',o:['26','24','28','25'],a:0},
+    {diff:'easy',q:'What is the plural of "child"?',o:['Children','Childs','Childen','Childrens'],a:0},
+    {diff:'easy',q:'Which is a vowel?',o:['A','B','C','D'],a:0},
+    {diff:'easy',q:'What color is the sun?',o:['Yellow','Blue','Red','Green'],a:0},
+    {diff:'easy',q:'What comes after "Monday"?',o:['Tuesday','Wednesday','Sunday','Thursday'],a:0},
+    {diff:'easy',q:'What is 5 + 3 in words?',o:['Eight','Seven','Nine','Six'],a:0},
+    {diff:'easy',q:'Which word is a noun?',o:['Book','Run','Happy','Quickly'],a:0},
+    {diff:'easy',q:'What is the opposite of "hot"?',o:['Cold','Warm','Cool','Mild'],a:0},
+    {diff:'med',q:'Which sentence is correct?',o:['She is happy','She are happy','She am happy','She be happy'],a:0},
+    {diff:'med',q:'What is the past tense of "go"?',o:['Went','Goes','Gone','Going'],a:0},
+    {diff:'med',q:'Which word is an adjective?',o:['Beautiful','Run','Slowly','Think'],a:0},
+    {diff:'med',q:'What does "enormous" mean?',o:['Very large','Very small','Very fast','Very slow'],a:0},
+    {diff:'med',q:'Which preposition fits: "She lives ___ Qatar"?',o:['in','on','at','by'],a:0},
+    {diff:'med',q:'What is the comparative of "good"?',o:['Better','Gooder','Best','More good'],a:0},
+    {diff:'med',q:'Which word means "happy"?',o:['Joyful','Sad','Angry','Tired'],a:0},
+    {diff:'hard',q:'Which sentence uses the present perfect correctly?',o:['I have eaten lunch','I has eaten lunch','I did eaten lunch','I was eaten lunch'],a:0},
+    {diff:'hard',q:'What is the passive voice of "The cat ate the fish"?',o:['The fish was eaten by the cat','The fish is eaten','The cat is eaten','The fish ate the cat'],a:0},
+    {diff:'hard',q:'Which word is spelled correctly?',o:['Necessary','Neccessary','Necesary','Necessery'],a:0},
+    {diff:'hard',q:'What does the idiom "break a leg" mean?',o:['Good luck','Hurry up','Be careful','Go away'],a:0},
+  ],
+  'حاسوب':[
+    {diff:'easy',q:'ما اختصار CPU؟',o:['وحدة المعالجة المركزية','الذاكرة العشوائية','القرص الصلب','شاشة العرض'],a:0},
+    {diff:'easy',q:'ما أداة الإدخال الشائعة للكتابة؟',o:['لوحة المفاتيح','الماوس','الشاشة','الطابعة'],a:0},
+    {diff:'easy',q:'ما اختصار WWW؟',o:['الشبكة العنكبوتية العالمية','الذاكرة العالمية','نظام الملفات','بروتوكول الإنترنت'],a:0},
+    {diff:'easy',q:'ما أداة الإخراج من التالية؟',o:['الطابعة','لوحة المفاتيح','الماوس','الميكروفون'],a:0},
+    {diff:'easy',q:'ما أول خطوة لتشغيل الحاسوب؟',o:['الضغط على زر التشغيل','فتح البرنامج','توصيل الإنترنت','إدخال كلمة السر'],a:0},
+    {diff:'easy',q:'ما برنامج معالجة النصوص الشائع من مايكروسوفت؟',o:['Word','Excel','PowerPoint','Outlook'],a:0},
+    {diff:'easy',q:'ما الوحدة الأساسية لقياس تخزين البيانات؟',o:['البايت','البت','الميغابايت','الغيغابايت'],a:0},
+    {diff:'easy',q:'ما اختصار RAM؟',o:['ذاكرة الوصول العشوائي','وحدة المعالجة','القرص الصلب','البطاقة الصوتية'],a:0},
+    {diff:'easy',q:'ما وظيفة الماوس؟',o:['التأشير والنقر','الكتابة','الطباعة','التخزين'],a:0},
+    {diff:'easy',q:'ما اسم المتصفح الشهير من Google؟',o:['Chrome','Firefox','Safari','Edge'],a:0},
+    {diff:'med',q:'ما الفرق بين البرامج والأجهزة؟',o:['البرامج تعليمات رقمية والأجهزة مادية','لا فرق','الأجهزة أقوى','البرامج مرئية فقط'],a:0},
+    {diff:'med',q:'ما وظيفة نظام التشغيل؟',o:['إدارة موارد الحاسوب','الطباعة فقط','تشغيل الألعاب','الاتصال بالإنترنت'],a:0},
+    {diff:'med',q:'ما معنى الموقع الإلكتروني URL؟',o:['عنوان المورد الموحد','اسم الموقع فقط','رقم الجهاز','بروتوكول الشبكة'],a:0},
+    {diff:'med',q:'ما اختصار HTML؟',o:['لغة ترميز النص التشعبي','نظام البريد','لغة البرمجة','بروتوكول النقل'],a:0},
+    {diff:'med',q:'ما الفرق بين القرص الصلب HDD وذاكرة SSD؟',o:['SSD أسرع وأصمت','HDD أسرع','لا فرق','HDD أغلى دائماً'],a:0},
+    {diff:'med',q:'ما اسم الفيروس الذي يشفر ملفاتك ويطلب فدية؟',o:['Ransomware','Spyware','Adware','Worm'],a:0},
+    {diff:'med',q:'ما وظيفة برنامج Excel؟',o:['جداول البيانات والحسابات','معالجة النصوص','العروض التقديمية','البريد الإلكتروني'],a:0},
+    {diff:'hard',q:'ما البروتوكول المستخدم لنقل البيانات عبر الإنترنت؟',o:['TCP/IP','HTTP','FTP','SMTP'],a:0},
+    {diff:'hard',q:'ما لغة البرمجة التي طُوّرت خصيصاً للويب الأمامي؟',o:['JavaScript','Python','Java','C++'],a:0},
+    {diff:'hard',q:'ما الفرق بين الخوارزمية والبرنامج؟',o:['الخوارزمية خطوات منطقية والبرنامج تطبيقها بلغة برمجة','لا فرق','البرنامج خطوات والخوارزمية تطبيق','الخوارزمية أسرع'],a:0},
+    {diff:'hard',q:'ما معنى رقم الـ IP Address؟',o:['عنوان هوية الجهاز على الشبكة','اسم الموقع','كلمة المرور','نوع المتصفح'],a:0},
+  ],
+  'عامة':[
+    {diff:'easy',q:'ما اسم أكبر محيط في العالم؟',o:['المحيط الهادئ','الأطلسي','الهندي','المتجمد'],a:0},
+    {diff:'easy',q:'ما اللون الذي يمثل السلام؟',o:['الأبيض','الأسود','الأحمر','الأزرق'],a:0},
+    {diff:'easy',q:'كم يساوي دزينة؟',o:['12','10','6','24'],a:0},
+    {diff:'easy',q:'ما عاصمة اليابان؟',o:['طوكيو','أوساكا','كيوتو','ناغويا'],a:0},
+    {diff:'easy',q:'من هو مخترع الهاتف؟',o:['غراهام بيل','إديسون','نيوتن','أينشتاين'],a:0},
+    {diff:'easy',q:'ما أكبر حيوان بري؟',o:['الفيل الأفريقي','وحيد القرن','الزرافة','فرس النهر'],a:0},
+    {diff:'easy',q:'كم ساعة في اليوم؟',o:['24','12','48','36'],a:0},
+    {diff:'easy',q:'ما عملة الولايات المتحدة الأمريكية؟',o:['الدولار','الإسترليني','اليورو','الين'],a:0},
+    {diff:'easy',q:'ما ناتج 9 × 9؟',o:['81','72','90','63'],a:0},
+    {diff:'easy',q:'ما أعلى قمة جبلية في العالم؟',o:['إيفرست','K2','كانغشنجونغا','لهوتسي'],a:0},
+    {diff:'med',q:'ما اسم العالم الذي اكتشف المضادات الحيوية؟',o:['فليمنغ','باستور','كوخ','لستر'],a:0},
+    {diff:'med',q:'ما أقصر شهر في السنة؟',o:['فبراير','يناير','نوفمبر','أبريل'],a:0},
+    {diff:'med',q:'ما عاصمة البرازيل؟',o:['برازيليا','ساو باولو','ريو دي جانيرو','سالفادور'],a:0},
+    {diff:'med',q:'كم دولة في منظمة الأمم المتحدة تقريباً؟',o:['193','150','200','170'],a:0},
+    {diff:'med',q:'ما اسم أول قمر صناعي أُطلق في الفضاء؟',o:['سبوتنيك 1','أبولو','فوياجر','هابل'],a:0},
+    {diff:'med',q:'ما الدولة التي تقع فيها أهرام الجيزة؟',o:['مصر','السودان','ليبيا','الجزائر'],a:0},
+    {diff:'med',q:'ما عملة اليابان؟',o:['الين','اليوان','الوون','الدونغ'],a:0},
+    {diff:'hard',q:'ما اسم أول إنسان في الفضاء؟',o:['يوري غاغارين','نيل أرمسترونج','باز ألدرين','جون غلين'],a:0},
+    {diff:'hard',q:'من ابتكر نظرية النسبية؟',o:['أينشتاين','نيوتن','هوكينغ','بور'],a:0},
+    {diff:'hard',q:'ما أقدم حضارة في التاريخ؟',o:['السومرية','المصرية','الفينيقية','الصينية'],a:0},
+    {diff:'hard',q:'ما طول خط الاستواء تقريباً؟',o:['40,075 كم','35,000 كم','45,000 كم','30,000 كم'],a:0},
+  ],
+  'ثقافة':[
+    {diff:'easy',q:'ما معنى كلمة «الإسلام»؟',o:['الاستسلام لله والسلام','العبادة','الدعاء','الإيمان'],a:0},
+    {diff:'easy',q:'من هو النبي الخاتم؟',o:['محمد ﷺ','عيسى','موسى','إبراهيم'],a:0},
+    {diff:'easy',q:'ما أعظم سورة في القرآن؟',o:['الفاتحة','البقرة','الإخلاص','آل عمران'],a:0},
+    {diff:'easy',q:'ما القبلة التي يتجه إليها المسلمون؟',o:['الكعبة المشرفة','المسجد النبوي','الأقصى','الحرم المكي'],a:0},
+    {diff:'easy',q:'ما اسم شهر الصيام؟',o:['رمضان','شعبان','محرم','ذو الحجة'],a:0},
+    {diff:'easy',q:'ما الكلمة التي يقولها المسلم عند بدء كل عمل؟',o:['بسم الله','الحمد لله','الله أكبر','سبحان الله'],a:0},
+    {diff:'easy',q:'ما اسم العيد الذي يأتي بعد رمضان؟',o:['عيد الفطر','عيد الأضحى','عيد الميلاد','عيد الربيع'],a:0},
+    {diff:'easy',q:'ما اسم الحج الذي يؤديه المسلم مرة في حياته إن استطاع؟',o:['الفريضة','النافلة','العمرة','الاعتكاف'],a:0},
+    {diff:'easy',q:'ما اسم الصلاة في منتصف النهار؟',o:['الظهر','العصر','الفجر','المغرب'],a:0},
+    {diff:'easy',q:'ما عدد ركعات صلاة العشاء؟',o:['4','3','2','5'],a:0},
+    {diff:'med',q:'ما الفرق بين العبادة والمعاملة في الإسلام؟',o:['العبادة حق الله والمعاملة حق الإنسان','لا فرق','المعاملة أهم','العبادة اختيارية'],a:0},
+    {diff:'med',q:'ما أنواع التوحيد الثلاثة؟',o:['توحيد الربوبية والألوهية والأسماء والصفات','الإيمان والعبادة فقط','الصلاة والصيام والزكاة','لا أنواع'],a:0},
+    {diff:'med',q:'ما القيم الإسلامية الأساسية في التعامل مع الجيران؟',o:['الإحسان والمساعدة والاحترام','التجاهل','المنافسة','الإبعاد'],a:0},
+    {diff:'med',q:'ما حكم الغيبة في الإسلام؟',o:['حرام','مكروه','مباح','واجب'],a:0},
+    {diff:'med',q:'ما أسماء الملائكة الموكلة بالإنسان؟',o:['الكرام الكاتبون','جبريل وميكائيل','إسرافيل ومالك','منكر ونكير'],a:0},
+    {diff:'med',q:'ما أنواع الصبر في الإسلام؟',o:['على الطاعة وعن المعصية وعلى البلاء','على المشقة فقط','على العبادة فقط','صبر واحد'],a:0},
+    {diff:'hard',q:'ما الفرق بين الكبائر والصغائر من الذنوب؟',o:['الكبائر ذنوب عظيمة فيها وعيد شديد والصغائر دون ذلك','لا فرق','الصغائر أشد','الكبائر مغفورة دائماً'],a:0},
+    {diff:'hard',q:'ما المقصود بالتوبة النصوح؟',o:['الندم والإقلاع والعزم على عدم العودة','الاستغفار فقط','الدعاء فقط','أداء الصلاة'],a:0},
+    {diff:'hard',q:'ما الحكمة من تشريع الزكاة؟',o:['تطهير المال وتقوية الرابطة الاجتماعية','تخزين المال','رفع الأسعار','تنمية الاقتصاد فقط'],a:0},
+    {diff:'hard',q:'ما أركان الحج الأربعة؟',o:['الإحرام والوقوف بعرفة والطواف والسعي','الإحرام والذبح','الطواف فقط','الوقوف بعرفة فقط'],a:0},
+  ],
+};
+
+// Grade-specific question banks
+QDB_STUDENT[1] = {
+  'اجتماعيات':[
+    {diff:'easy',q:'ما اسم بلدنا؟',o:['قطر','الإمارات','السعودية','الكويت'],a:0},
+    {diff:'easy',q:'ما عاصمة قطر؟',o:['الدوحة','الريان','الوكرة','الخور'],a:0},
+    {diff:'med',q:'كم عدد أيام الأسبوع؟',o:['7','5','6','8'],a:0},
+    {diff:'med',q:'ما اسم أمير قطر الحالي؟',o:['الشيخ تميم','الشيخ حمد','الشيخ خليفة','الشيخ محمد'],a:0},
+    {diff:'hard',q:'ما لون علم قطر؟',o:['برغندي وأبيض','أحمر وأبيض','أزرق وأبيض','أخضر وأبيض'],a:0},
+    {diff:'hard',q:'في أي قارة تقع قطر؟',o:['آسيا','أفريقيا','أوروبا','أمريكا'],a:0},
+  ],
+  'عربي':[
+    {diff:'easy',q:'كم حرفاً في الهجاء العربي؟',o:['28','26','30','24'],a:0},
+    {diff:'easy',q:'ما الحرف الأول في الأبجدية؟',o:['الألف','الباء','التاء','الثاء'],a:0},
+    {diff:'med',q:'ما ضد كلمة «كبير»؟',o:['صغير','طويل','ثقيل','سريع'],a:0},
+    {diff:'med',q:'ما جمع كلمة «كتاب»؟',o:['كُتُب','كِتَاب','كاتبون','مكتبة'],a:0},
+    {diff:'hard',q:'ما مؤنث كلمة «معلم»؟',o:['معلمة','معلمات','تعليم','مدرسة'],a:0},
+    {diff:'hard',q:'ما المصدر من الفعل «كتب»؟',o:['كتابة','كاتب','مكتوب','يكتب'],a:0},
+  ],
+  'اسلامية':[
+    {diff:'easy',q:'كم عدد أركان الإسلام؟',o:['5','4','6','7'],a:0},
+    {diff:'easy',q:'ما أول ركن من أركان الإسلام؟',o:['الشهادتان','الصلاة','الزكاة','الصوم'],a:0},
+    {diff:'med',q:'كم عدد الصلوات اليومية؟',o:['5','3','4','6'],a:0},
+    {diff:'med',q:'ما عدد ركعات صلاة الفجر؟',o:['2','3','4','1'],a:0},
+    {diff:'hard',q:'ما اسم الكتاب المقدس للمسلمين؟',o:['القرآن الكريم','التوراة','الإنجيل','الزبور'],a:0},
+    {diff:'hard',q:'في أي شهر يصوم المسلمون؟',o:['رمضان','شعبان','محرم','ذو الحجة'],a:0},
+  ],
+  'علوم_ط':[
+    {diff:'easy',q:'ما الغاز الذي يتنفسه الإنسان؟',o:['الأكسجين','ثاني أكسيد الكربون','النيتروجين','الهيدروجين'],a:0},
+    {diff:'easy',q:'ما لون السماء في النهار؟',o:['الأزرق','الأحمر','الأخضر','الأصفر'],a:0},
+    {diff:'med',q:'ما الحيوان الذي يُنتج العسل؟',o:['النحل','الفراشة','الدودة','النملة'],a:0},
+    {diff:'med',q:'ما الكوكب الذي نعيش عليه؟',o:['الأرض','المريخ','الزهرة','عطارد'],a:0},
+    {diff:'hard',q:'ما أكبر كوكب في المجموعة الشمسية؟',o:['المشتري','زحل','أورانوس','نبتون'],a:0},
+    {diff:'hard',q:'كم يوماً تستغرق الأرض لتدور حول الشمس؟',o:['365','360','366','364'],a:0},
+  ],
+  'رياضيات':[
+    {diff:'easy',q:'كم ناتج 2 + 3؟',o:['5','4','6','7'],a:0},
+    {diff:'easy',q:'كم ناتج 10 - 4؟',o:['6','5','7','8'],a:0},
+    {diff:'med',q:'كم زاوية في المثلث؟',o:['3','4','2','5'],a:0},
+    {diff:'med',q:'ما ناتج 5 × 2؟',o:['10','8','12','15'],a:0},
+    {diff:'hard',q:'ما مجموع زوايا المثلث؟',o:['180°','360°','90°','270°'],a:0},
+    {diff:'hard',q:'ما الرقم الزوجي من التالية؟',o:['4','3','7','9'],a:0},
+  ],
+  'انجليزي':[
+    {diff:'easy',q:'How many letters in the English alphabet?',o:['26','24','28','25'],a:0},
+    {diff:'easy',q:'What color is the sky?',o:['Blue','Red','Green','Yellow'],a:0},
+    {diff:'med',q:'What is the opposite of "big"?',o:['Small','Tall','Heavy','Long'],a:0},
+    {diff:'med',q:'What comes after "Sunday"?',o:['Monday','Saturday','Friday','Tuesday'],a:0},
+    {diff:'hard',q:'Which word is a noun?',o:['Book','Run','Happy','Quickly'],a:0},
+    {diff:'hard',q:'What is the plural of "cat"?',o:['Cats','Cates','Catos','Cat'],a:0},
+  ],
+  'حاسوب':[
+    {diff:'easy',q:'ما الجهاز الذي نستخدمه للنقر؟',o:['الماوس','لوحة المفاتيح','الشاشة','الطابعة'],a:0},
+    {diff:'easy',q:'ما الجهاز الذي نكتب عليه؟',o:['لوحة المفاتيح','الماوس','الشاشة','الطابعة'],a:0},
+    {diff:'med',q:'ما وظيفة الطابعة؟',o:['طباعة الورق','الكتابة','العرض','التخزين'],a:0},
+    {diff:'med',q:'ما الجهاز الذي يُعرض الصورة؟',o:['الشاشة','الطابعة','الماوس','لوحة المفاتيح'],a:0},
+    {diff:'hard',q:'ما اختصار CPU؟',o:['وحدة المعالجة المركزية','الذاكرة','القرص الصلب','الشبكة'],a:0},
+    {diff:'hard',q:'ما اسم متصفح Google الشهير؟',o:['Chrome','Firefox','Safari','Edge'],a:0},
+  ],
+  'عامة':[
+    {diff:'easy',q:'كم يوماً في الأسبوع؟',o:['7','5','6','8'],a:0},
+    {diff:'easy',q:'كم شهراً في السنة؟',o:['12','10','11','13'],a:0},
+    {diff:'med',q:'ما اسم أكبر حيوان بري؟',o:['الفيل','الأسد','الزرافة','فرس النهر'],a:0},
+    {diff:'med',q:'ما عملة قطر؟',o:['الريال','الدرهم','الدينار','الجنيه'],a:0},
+    {diff:'hard',q:'كم كوكباً في المجموعة الشمسية؟',o:['8','9','7','10'],a:0},
+    {diff:'hard',q:'ما اسم نهر مصر الشهير؟',o:['النيل','الفرات','دجلة','الأردن'],a:0},
+  ],
+  'ثقافة':[
+    {diff:'easy',q:'من هو نبينا؟',o:['محمد ﷺ','عيسى','موسى','إبراهيم'],a:0},
+    {diff:'easy',q:'ما الكلمة التي نقولها عند الأكل؟',o:['بسم الله','الحمد لله','الله أكبر','سبحان الله'],a:0},
+    {diff:'med',q:'ما اسم العيد بعد رمضان؟',o:['عيد الفطر','عيد الأضحى','النيروز','الربيع'],a:0},
+    {diff:'med',q:'كم عدد أركان الإيمان؟',o:['6','5','4','7'],a:0},
+    {diff:'hard',q:'ما القبلة التي يتجه إليها المسلمون؟',o:['الكعبة المشرفة','المسجد النبوي','الأقصى','القدس'],a:0},
+    {diff:'hard',q:'ما أعظم سورة في القرآن؟',o:['الفاتحة','البقرة','الإخلاص','الناس'],a:0},
+  ],
+};
+
+QDB_STUDENT[3] = {
+  'اجتماعيات':[
+    {diff:'easy',q:'ما عاصمة المملكة العربية السعودية؟',o:['الرياض','جدة','مكة','المدينة'],a:0},
+    {diff:'easy',q:'كم دولة في مجلس التعاون الخليجي؟',o:['6','5','7','8'],a:0},
+    {diff:'med',q:'ما عملة الكويت؟',o:['الدينار','الريال','الدرهم','الجنيه'],a:0},
+    {diff:'med',q:'ما أكبر دولة عربية مساحةً؟',o:['الجزائر','السعودية','السودان','ليبيا'],a:0},
+    {diff:'hard',q:'ما عاصمة سلطنة عُمان؟',o:['مسقط','صلالة','نزوى','صحار'],a:0},
+    {diff:'hard',q:'في أي خليج تقع قطر والبحرين؟',o:['الخليج العربي','خليج عدن','خليج عُمان','البحر الأحمر'],a:0},
+  ],
+  'عربي':[
+    {diff:'easy',q:'ما جمع كلمة «مدرسة»؟',o:['مدارس','مدرسات','مدرستان','مدرسات'],a:0},
+    {diff:'easy',q:'ما ضد كلمة «الليل»؟',o:['النهار','الصباح','المساء','الفجر'],a:0},
+    {diff:'med',q:'ما الفعل المضارع من «أكل»؟',o:['يأكل','آكل','أكول','مأكول'],a:0},
+    {diff:'med',q:'ما علامة التأنيث في اللغة العربية؟',o:['التاء المربوطة','الألف','الواو','الياء'],a:0},
+    {diff:'hard',q:'ما جمع كلمة «رجل»؟',o:['رجال','أرجل','رجول','رجالة'],a:0},
+    {diff:'hard',q:'ما المصدر من الفعل «شرب»؟',o:['شُرب','شارب','مشروب','يشرب'],a:0},
+  ],
+  'اسلامية':[
+    {diff:'easy',q:'كم عدد ركعات صلاة الظهر؟',o:['4','2','3','5'],a:0},
+    {diff:'easy',q:'ما اسم العيد بعد الحج؟',o:['عيد الأضحى','عيد الفطر','النيروز','الربيع'],a:0},
+    {diff:'med',q:'ما اسم النبي الذي أُلقي في النار ولم تحرقه؟',o:['إبراهيم','موسى','يوسف','عيسى'],a:0},
+    {diff:'med',q:'كم عدد سور القرآن؟',o:['114','100','120','130'],a:0},
+    {diff:'hard',q:'ما اسم النبي الذي ابتلعه الحوت؟',o:['يونس','يوسف','يعقوب','يحيى'],a:0},
+    {diff:'hard',q:'ما اسم صاحب النبي موسى الذي علّمه؟',o:['الخضر','لقمان','ذو القرنين','إلياس'],a:0},
+  ],
+  'علوم_ط':[
+    {diff:'easy',q:'ما الغاز الذي تُخرجه النباتات؟',o:['الأكسجين','ثاني أكسيد الكربون','النيتروجين','الهيدروجين'],a:0},
+    {diff:'easy',q:'ما أسرع حيوان بري؟',o:['الفهد','الأسد','النمر','الحصان'],a:0},
+    {diff:'med',q:'كم عدد عظام الإنسان البالغ؟',o:['206','200','212','198'],a:0},
+    {diff:'med',q:'ما العضو الذي يضخ الدم في الجسم؟',o:['القلب','الرئة','الكلية','الكبد'],a:0},
+    {diff:'hard',q:'ما الخاصية التي تمتص بها النباتات الماء من التربة؟',o:['الخاصية الشعرية','الجاذبية','الضغط','التبخر'],a:0},
+    {diff:'hard',q:'ما أنواع التغذية عند الحيوانات؟',o:['عاشبة ولاحمة وآكلة للجميع','عاشبة فقط','لاحمة فقط','حشرية فقط'],a:0},
+  ],
+  'رياضيات':[
+    {diff:'easy',q:'ما ناتج 6 × 7؟',o:['42','36','48','54'],a:0},
+    {diff:'easy',q:'ما ناتج 100 ÷ 5؟',o:['20','15','25','10'],a:0},
+    {diff:'med',q:'ما مساحة المستطيل طوله 6 وعرضه 4؟',o:['24 وحدة²','20 وحدة²','18 وحدة²','10 وحدة²'],a:0},
+    {diff:'med',q:'ما محيط المربع طول ضلعه 5 سم؟',o:['20 سم','25 سم','15 سم','10 سم'],a:0},
+    {diff:'hard',q:'ما ناتج 456 + 789؟',o:['1245','1145','1355','1235'],a:0},
+    {diff:'hard',q:'إذا كان عمر أحمد 9 سنوات وأخوه أكبر منه بـ 4 سنوات، كم عمر أخوه؟',o:['13','12','14','11'],a:0},
+  ],
+  'انجليزي':[
+    {diff:'easy',q:'What is the capital of England?',o:['London','Paris','Berlin','Rome'],a:0},
+    {diff:'easy',q:'What comes after "Monday"?',o:['Tuesday','Wednesday','Sunday','Thursday'],a:0},
+    {diff:'med',q:'What is the plural of "child"?',o:['Children','Childs','Childen','Childrens'],a:0},
+    {diff:'med',q:'Which word is a verb?',o:['Run','Book','Happy','Tall'],a:0},
+    {diff:'hard',q:'Which sentence is correct?',o:['She is happy','She are happy','She am happy','She be happy'],a:0},
+    {diff:'hard',q:'What is the past tense of "eat"?',o:['Ate','Eated','Eaten','Eating'],a:0},
+  ],
+  'حاسوب':[
+    {diff:'easy',q:'ما برنامج الرسام في الحاسوب؟',o:['Paint','Word','Excel','Chrome'],a:0},
+    {diff:'easy',q:'ما اختصار «حفظ» في الحاسوب؟',o:['Ctrl+S','Ctrl+C','Ctrl+V','Ctrl+Z'],a:0},
+    {diff:'med',q:'ما الوحدة الأساسية لقياس تخزين البيانات؟',o:['البايت','البت','الميغابايت','الغيغابايت'],a:0},
+    {diff:'med',q:'ما اختصار RAM؟',o:['ذاكرة الوصول العشوائي','وحدة المعالجة','القرص الصلب','البطاقة الصوتية'],a:0},
+    {diff:'hard',q:'ما الفرق بين برامج النظام وبرامج التطبيقات؟',o:['النظام يُدير الحاسوب والتطبيقات لأغراض محددة','لا فرق','التطبيقات أقوى','النظام للألعاب'],a:0},
+    {diff:'hard',q:'ما اسم الذاكرة التي تحتفظ بالبيانات بعد إيقاف الجهاز؟',o:['الذاكرة الدائمة ROM/HDD','ذاكرة RAM','ذاكرة Cache','ذاكرة Flash'],a:0},
+  ],
+  'عامة':[
+    {diff:'easy',q:'من مخترع الهاتف؟',o:['غراهام بيل','إديسون','نيوتن','أينشتاين'],a:0},
+    {diff:'easy',q:'ما أطول نهر في العالم؟',o:['النيل','الأمازون','المسيسيبي','اليانغتسي'],a:0},
+    {diff:'med',q:'ما عاصمة اليابان؟',o:['طوكيو','أوساكا','كيوتو','ناغويا'],a:0},
+    {diff:'med',q:'كم يوماً في السنة الكبيسة؟',o:['366','365','367','364'],a:0},
+    {diff:'hard',q:'في أي قارة تقع البرازيل؟',o:['أمريكا الجنوبية','أمريكا الشمالية','أفريقيا','آسيا'],a:0},
+    {diff:'hard',q:'ما اسم أكبر محيط في العالم؟',o:['المحيط الهادئ','الأطلسي','الهندي','المتجمد'],a:0},
+  ],
+  'ثقافة':[
+    {diff:'easy',q:'ما الكلمة التي نقولها عند العطس؟',o:['الحمد لله','بسم الله','الله أكبر','سبحان الله'],a:0},
+    {diff:'easy',q:'ما صلاة آخر اليوم؟',o:['العشاء','المغرب','العصر','الظهر'],a:0},
+    {diff:'med',q:'ما اسم أول مؤذن في الإسلام؟',o:['بلال بن رباح','أبو بكر','عمر','علي'],a:0},
+    {diff:'med',q:'ما الشهر الذي وُلد فيه النبي ﷺ؟',o:['ربيع الأول','رمضان','محرم','شعبان'],a:0},
+    {diff:'hard',q:'ما أول كلمة نزلت في القرآن الكريم؟',o:['اقرأ','بسم','الحمد','قل'],a:0},
+    {diff:'hard',q:'ما اسم الصحابي الملقّب بـ«سيف الله المسلول»؟',o:['خالد بن الوليد','عمر بن الخطاب','علي بن أبي طالب','الزبير بن العوام'],a:0},
+  ],
+};
+
+QDB_STUDENT[7] = {
+  'اجتماعيات':[
+    {diff:'easy',q:'ما نظام الحكم في المملكة العربية السعودية؟',o:['ملكية مطلقة','جمهورية','ملكية دستورية','فيدرالية'],a:0},
+    {diff:'easy',q:'ما أهم موارد اقتصاد دول الخليج؟',o:['النفط والغاز الطبيعي','الزراعة','السياحة','الصناعة'],a:0},
+    {diff:'med',q:'ما مفهوم العولمة؟',o:['تكامل اقتصادي وثقافي عالمي','عزل الدول','التجارة المحلية','الاستقلال الاقتصادي'],a:0},
+    {diff:'med',q:'ما أسباب قيام الثورة الصناعية في أوروبا؟',o:['توافر المواد الخام والاختراعات والرأسمال','الحروب فقط','الزراعة فقط','الدين فقط'],a:0},
+    {diff:'hard',q:'ما الفرق بين الحضارة والثقافة؟',o:['الحضارة منجزات مادية والثقافة قيم ومعتقدات','لا فرق','الثقافة أشمل دائماً','الحضارة أشمل دائماً'],a:0},
+    {diff:'hard',q:'ما أسباب انهيار الدولة العباسية؟',o:['الغزو المغولي والصراعات الداخلية','الجفاف','الزلازل','الأوبئة'],a:0},
+  ],
+  'عربي':[
+    {diff:'easy',q:'ما الفرق بين الفعل اللازم والمتعدي؟',o:['المتعدي يحتاج مفعولاً به واللازم لا','لا فرق','اللازم أقوى','المتعدي ماضٍ فقط'],a:0},
+    {diff:'easy',q:'ما الحال في الجملة العربية؟',o:['وصف يبيّن هيئة صاحبه عند وقوع الفعل','مفعول به','خبر','نعت'],a:0},
+    {diff:'med',q:'ما أنواع الجمع في اللغة العربية؟',o:['مذكر سالم ومؤنث سالم وتكسير','مذكر ومؤنث','مفرد ومثنى','منتظم وغير منتظم'],a:0},
+    {diff:'med',q:'ما الفرق بين التشبيه والاستعارة؟',o:['التشبيه يذكر الأداة والاستعارة لا تذكرها','لا فرق','الاستعارة أضعف','التشبيه حديث'],a:0},
+    {diff:'hard',q:'ما أركان الجملة الفعلية؟',o:['فعل وفاعل ومفعول به','فعل فقط','فاعل ومفعول','مبتدأ وخبر'],a:0},
+    {diff:'hard',q:'ما المقصود بالأسلوب الخبري والإنشائي؟',o:['الخبري يحتمل الصدق والكذب والإنشائي لا','لا فرق','الإنشائي قديم','الخبري حديث'],a:0},
+  ],
+  'اسلامية':[
+    {diff:'easy',q:'ما مفهوم الأمانة في الإسلام؟',o:['أداء الحقوق لأصحابها','الصدق فقط','العمل','الصلاة'],a:0},
+    {diff:'easy',q:'ما الفرق بين الفرض والسنة؟',o:['الفرض واجب والسنة مستحبة','لا فرق','السنة أهم','الفرض اختياري'],a:0},
+    {diff:'med',q:'ما الأسباب التي تُكفّر الصغائر؟',o:['الصلوات الخمس والوضوء والصيام','الاستغفار فقط','الدعاء فقط','الصدقة فقط'],a:0},
+    {diff:'med',q:'ما مفهوم الجهاد في الإسلام؟',o:['بذل الجهد في كل ما يُرضي الله','الحرب فقط','الدفاع فقط','العبادة فقط'],a:0},
+    {diff:'hard',q:'ما شروط الأمر بالمعروف والنهي عن المنكر؟',o:['العلم والقدرة وانتفاء الضرر وأن يكون منكراً','العلم فقط','القوة فقط','المكانة فقط'],a:0},
+    {diff:'hard',q:'ما الفرق بين الكبائر والصغائر؟',o:['الكبائر فيها نص بالوعيد والصغائر دون ذلك','لا فرق','الصغائر أشد','الكبائر مغفورة'],a:0},
+  ],
+  'علوم_ط':[
+    {diff:'easy',q:'ما الفرق بين المخلوط والمركب الكيميائي؟',o:['المخلوط يمكن فصله بالطرق الفيزيائية والمركب لا','لا فرق','المركب أضعف','المخلوط دائم'],a:0},
+    {diff:'easy',q:'ما عدد بروتونات ذرة الكربون؟',o:['6','8','12','14'],a:0},
+    {diff:'med',q:'ما قانون حفظ المادة؟',o:['المادة لا تُخلق ولا تُفنى بل تتحول','المادة تُفنى بالحرارة','المادة تتخلق من العدم','المادة ثابتة دائماً'],a:0},
+    {diff:'med',q:'ما الفرق بين التوصيل والحمل الحراري والإشعاع؟',o:['التوصيل في الأجسام الصلبة والحمل في السوائل والإشعاع بدون وسط','لا فرق','التوصيل أسرع دائماً','الإشعاع في الصلبة فقط'],a:0},
+    {diff:'hard',q:'ما الفرق بين الخلية النباتية والحيوانية؟',o:['النباتية لها جدار خلوي وبلاستيدات والحيوانية لها مريكزات','لا فرق','الحيوانية أكبر','النباتية لها نواة فقط'],a:0},
+    {diff:'hard',q:'ما مفهوم التركيز المولي للمحلول؟',o:['عدد مولات المذاب في لتر من المحلول','كتلة المذاب','حجم المذيب','درجة الحرارة'],a:0},
+  ],
+  'رياضيات':[
+    {diff:'easy',q:'ما ناتج (3 + 4i)(2 - i) للأعداد المركبة؟',o:['10 + 5i','7 + 3i','6 - 4i','5 + 7i'],a:0},
+    {diff:'easy',q:'ما مشتقة x³؟',o:['3x²','x²','3x','2x³'],a:0},
+    {diff:'med',q:'ما مجموع زوايا المضلع السداسي؟',o:['720°','540°','360°','900°'],a:0},
+    {diff:'med',q:'ما قانون ذات الحدين؟',o:['(a+b)ⁿ = Σ C(n,k) aⁿ⁻ᵏ bᵏ','a²+b²=(a+b)²','(a-b)²=a²-b²','a³+b³=(a+b)(a²-ab+b²)'],a:0},
+    {diff:'hard',q:'ما النسبة الذهبية؟',o:['φ = (1+√5)/2 ≈ 1.618','π ≈ 3.14159','e ≈ 2.71828','√2 ≈ 1.41421'],a:0},
+    {diff:'hard',q:'ما المتسلسلة الحسابية التي مجموع حدودها n(n+1)/2؟',o:['1+2+3+...+n','1+4+9+...+n²','مجموع الأعداد الفردية','مجموع الأعداد الزوجية'],a:0},
+  ],
+  'انجليزي':[
+    {diff:'easy',q:'What is the past tense of "go"?',o:['Went','Goes','Gone','Going'],a:0},
+    {diff:'easy',q:'Which word is an adjective?',o:['Beautiful','Run','Slowly','Think'],a:0},
+    {diff:'med',q:'What is the passive voice of "The teacher taught the students"?',o:['The students were taught by the teacher','The teacher was taught','Students are teaching','The teacher has taught'],a:0},
+    {diff:'med',q:'What does "enormous" mean?',o:['Very large','Very small','Very fast','Very slow'],a:0},
+    {diff:'hard',q:'Which sentence uses the present perfect correctly?',o:['I have visited Paris twice','I have visit Paris','I did visited Paris','I was visiting Paris'],a:0},
+    {diff:'hard',q:'What is a "simile"?',o:['A comparison using like or as','A comparison without like/as','A type of rhyme','A narrative technique'],a:0},
+  ],
+  'حاسوب':[
+    {diff:'easy',q:'ما لغة برمجة المواقع الأمامي؟',o:['HTML/CSS/JavaScript','Python','Java','C++'],a:0},
+    {diff:'easy',q:'ما الفرق بين الإنترنت والويب؟',o:['الإنترنت شبكة بنية تحتية والويب خدمة عليها','لا فرق','الويب أقدم','الإنترنت للصور فقط'],a:0},
+    {diff:'med',q:'ما مفهوم قاعدة البيانات العلائقية؟',o:['جداول مترابطة بمفاتيح أجنبية','ملفات نصية','قوائم بسيطة','جداول منفصلة'],a:0},
+    {diff:'med',q:'ما الفرق بين الشبكة المحلية LAN والواسعة WAN؟',o:['LAN في منطقة محدودة وWAN تغطي مناطق واسعة','لا فرق','WAN أسرع دائماً','LAN أكبر'],a:0},
+    {diff:'hard',q:'ما مبدأ التشفير المتماثل وغير المتماثل؟',o:['المتماثل مفتاح واحد وغير المتماثل مفتاح عام وخاص','لا فرق','غير المتماثل أقدم','المتماثل أقوى دائماً'],a:0},
+    {diff:'hard',q:'ما تعقيد خوارزمية ترتيب الفقاعات Bubble Sort في أسوأ حالة؟',o:['O(n²)','O(n)','O(log n)','O(n log n)'],a:0},
+  ],
+  'عامة':[
+    {diff:'easy',q:'من اكتشف الكهرباء؟',o:['بنجامين فرانكلين','إديسون','نيوتن','أينشتاين'],a:0},
+    {diff:'easy',q:'ما اسم أول رائد فضاء في العالم؟',o:['يوري غاغارين','نيل أرمسترونج','باز ألدرين','جون غلين'],a:0},
+    {diff:'med',q:'ما الدولة الأكثر سكاناً في العالم؟',o:['الهند','الصين','الولايات المتحدة','إندونيسيا'],a:0},
+    {diff:'med',q:'ما اسم أعلى قمة جبلية في العالم؟',o:['إيفرست','K2','كانغشنجونغا','لهوتسي'],a:0},
+    {diff:'hard',q:'ما نظرية التطور لداروين؟',o:['الكائنات تطورت عبر الانتخاب الطبيعي','الله خلق كل شيء دفعة','الكائنات ثابتة','البيئة فقط تُشكّل الكائنات'],a:0},
+    {diff:'hard',q:'ما اسم أكبر هرم في العالم؟',o:['هرم خوفو','هرم خفرع','هرم منقرع','هرم أكبر في تشولولا'],a:0},
+  ],
+  'ثقافة':[
+    {diff:'easy',q:'ما مفهوم الإخلاص في العمل؟',o:['أداء العمل على أكمل وجه دون رياء','العمل للشهرة','العمل للمال فقط','العمل حين يُراقبك الناس'],a:0},
+    {diff:'easy',q:'ما الفرق بين الصدق والأمانة؟',o:['الصدق في القول والأمانة في الفعل والاحتفاظ','لا فرق','الأمانة في القول','الصدق في الفعل'],a:0},
+    {diff:'med',q:'ما مفهوم الوسطية في الإسلام؟',o:['التوازن بين المادي والروحي والدنيا والآخرة','التطرف','التشدد','التساهل الكامل'],a:0},
+    {diff:'med',q:'ما أنواع الصبر في الإسلام؟',o:['على الطاعة وعن المعصية وعلى البلاء','على المشقة فقط','صبر واحد','الصبر على العبادة فقط'],a:0},
+    {diff:'hard',q:'ما الفرق بين الزهد والتقشف في الإسلام؟',o:['الزهد عدم تعلق القلب بالدنيا والتقشف ترك الزينة','لا فرق','التقشف أفضل','الزهد ممنوع'],a:0},
+    {diff:'hard',q:'ما مفهوم مقاصد الشريعة؟',o:['الأهداف التي جاءت الشريعة لتحقيقها كحفظ الدين والنفس','قواعد الفقه فقط','أصول الدين','مصادر التشريع'],a:0},
+  ],
+};
+
+QDB_STUDENT[10] = {
+  'اجتماعيات':[
+    {diff:'easy',q:'ما نظام الحكم في قطر؟',o:['ملكية مطلقة','جمهورية','ملكية دستورية','اتحادية'],a:0},
+    {diff:'easy',q:'ما الدستور القطري الحالي؟',o:['دستور 2003','النظام الأساسي 1970','المرسوم 1995','ميثاق 1972'],a:0},
+    {diff:'med',q:'ما نظرية العقد الاجتماعي لروسو؟',o:['السلطة من إرادة الشعب','الملك يحكم بحق إلهي','القوة تُكسب الحق','الدولة ضرورة طبيعية'],a:0},
+    {diff:'med',q:'ما أهم نظريات العلاقات الدولية؟',o:['الواقعية والليبرالية والبنائية','الرأسمالية والاشتراكية','الديمقراطية والاستبداد','العولمة والقومية'],a:0},
+    {diff:'hard',q:'ما الفرق بين الاندماج والاستيعاب في التنوع الثقافي؟',o:['الاندماج يحتفظ بالهويات والاستيعاب يذيبها','لا فرق','الاستيعاب يحافظ على الهويات','الاندماج يلغي الثقافة'],a:0},
+    {diff:'hard',q:'ما مفهوم السيادة في القانون الدولي؟',o:['سلطة الدولة العليا داخل إقليمها','قوة الجيش','الثروة الاقتصادية','العضوية في الأمم المتحدة'],a:0},
+  ],
+  'عربي':[
+    {diff:'easy',q:'ما المصطلح الذي يعبّر عن الإيجاز في البلاغة؟',o:['الإيجاز','الإطناب','المساواة','التشبيه'],a:0},
+    {diff:'easy',q:'ما إعراب «جاءَ الطلابُ»؟',o:['فاعل مرفوع','مفعول به','مبتدأ','خبر'],a:0},
+    {diff:'med',q:'ما الفرق بين المجاز والحقيقة؟',o:['الحقيقة ما وُضع له اللفظ أصلاً والمجاز ما تُوسّع فيه','لا فرق','المجاز أصل','الحقيقة مجازية'],a:0},
+    {diff:'med',q:'ما أنواع الاستعارة في البلاغة؟',o:['تصريحية ومكنية','حقيقية ومجازية','أولية وثانوية','بصرية وسمعية'],a:0},
+    {diff:'hard',q:'ما الفرق بين السجع والجناس؟',o:['السجع توافق الفواصل والجناس توافق اللفظ مع اختلاف المعنى','لا فرق','الجناس في النثر فقط','السجع في الشعر فقط'],a:0},
+    {diff:'hard',q:'ما المقصود بـ«الوحدة العضوية» في الشعر الحديث؟',o:['تماسك القصيدة حول محور واحد','قافية موحدة','وزن ثابت','موضوع واحد'],a:0},
+  ],
+  'اسلامية':[
+    {diff:'easy',q:'ما الحكمة من تشريع الزكاة؟',o:['تطهير المال وتقوية الرابطة الاجتماعية','تخزين المال','رفع الأسعار','تنمية الاقتصاد'],a:0},
+    {diff:'easy',q:'ما مفهوم العبادة في الإسلام؟',o:['كل ما يُتقرّب به إلى الله','الصلاة فقط','العبادات الشعائرية','الأعمال الدينية'],a:0},
+    {diff:'med',q:'ما مقاصد الشريعة الإسلامية الخمسة؟',o:['الدين والنفس والعقل والنسل والمال','العبادة والمعاملة','الدنيا والآخرة','الفرد والمجتمع'],a:0},
+    {diff:'med',q:'ما الفرق بين الاجتهاد والتقليد في الفقه؟',o:['الاجتهاد استخراج الحكم والتقليد الأخذ بقول العالم','لا فرق','التقليد أصوب','الاجتهاد ممنوع'],a:0},
+    {diff:'hard',q:'ما منهج أهل السنة في العقيدة؟',o:['الوسطية بين التأويل والتجسيم واتباع السلف','التأويل الكامل','الإثبات بلا تكييف','التفويض فقط'],a:0},
+    {diff:'hard',q:'ما الفرق بين النسخ والتخصيص في الأصول؟',o:['النسخ رفع الحكم كلياً والتخصيص تقييد العام','لا فرق','التخصيص أقوى','النسخ جزئي'],a:0},
+  ],
+  'علوم_ط':[
+    {diff:'easy',q:'ما الفرق بين الحمض والقاعدة؟',o:['الحمض يُعطي بروتون والقاعدة تأخذه','الحمض طعمه حلو','القاعدة تحرق','لا فرق'],a:0},
+    {diff:'easy',q:'ما قانون أوم؟',o:['V = IR','F = ma','E = mc²','P = mv'],a:0},
+    {diff:'med',q:'ما الفرق بين الانشطار والاندماج النووي؟',o:['الانشطار تقسيم نواة ثقيلة والاندماج دمج نواتين خفيفتين','لا فرق','الاندماج أخطر','الانشطار أبطأ'],a:0},
+    {diff:'med',q:'ما مبدأ عدم اليقين لهايزنبرغ؟',o:['لا يمكن تحديد موقع وزخم الجسيم بدقة تامة في وقت واحد','الجسيم ليس له موقع','الزخم ثابت دائماً','الطاقة غير محدودة'],a:0},
+    {diff:'hard',q:'ما الفرق بين الطيف المستمر وطيف الانبعاث؟',o:['المستمر يحتوي جميع الأطوال الموجية والانبعاث خطوط محددة','لا فرق','الانبعاث أقوى','المستمر أكثر طاقة'],a:0},
+    {diff:'hard',q:'ما معادلة الطاقة والكتلة لأينشتاين؟',o:['E = mc²','F = ma','V = IR','P = mv'],a:0},
+  ],
+  'رياضيات':[
+    {diff:'easy',q:'ما تعريف المشتقة؟',o:['معدل تغير الدالة لحظياً','مساحة أسفل المنحنى','حد الدالة','تكامل الدالة'],a:0},
+    {diff:'easy',q:'ما مشتقة sin(x)؟',o:['cos(x)','-cos(x)','sin(x)','-sin(x)'],a:0},
+    {diff:'med',q:'ما قاعدة السلسلة في التفاضل؟',o:["d/dx[f(g(x))] = f'(g(x))·g'(x)",'d/dx[f+g]=f+g','d/dx[fg]=fg','d/dx[f/g]=f/g'],a:0},
+    {diff:'med',q:'ما تكامل 2x؟',o:['x² + C','2x² + C','x + C','x²/2 + C'],a:0},
+    {diff:'hard',q:'ما نظرية القيمة الوسطى؟',o:['يوجد c بين a وb حيث f(b)-f(a) = f'(c)(b-a)','f'=0 في كل نقطة','التكامل يساوي المشتقة','الدالة لها حد واحد'],a:0},
+    {diff:'hard',q:'ما مفهوم التقارب في المتسلسلات؟',o:['اقتراب المتسلسلة من قيمة محددة','تباعدها للانهاية','تساوي حدودها','تناوب إشاراتها'],a:0},
+  ],
+  'انجليزي':[
+    {diff:'easy',q:'What is a "metaphor"?',o:['Comparing without like/as','Comparing with like/as','A type of rhyme','A narrative technique'],a:0},
+    {diff:'easy',q:'Which is a subordinating conjunction?',o:['Although','And','But','Or'],a:0},
+    {diff:'med',q:'What is the subjunctive mood used for?',o:['Hypothetical or wishful situations','Facts','Commands','Questions'],a:0},
+    {diff:'med',q:'What does "omniscient narrator" mean?',o:['All-knowing narrator','First-person narrator','Unreliable narrator','Third-person limited'],a:0},
+    {diff:'hard',q:'What is "stream of consciousness" in literature?',o:["A technique depicting a character's continuous thoughts","A type of dialogue","An action sequence","A description technique"],a:0},
+    {diff:'hard',q:'What is the difference between "affect" and "effect"?',o:['Affect is a verb, effect is usually a noun','No difference','Both are verbs','Both are nouns'],a:0},
+  ],
+  'حاسوب':[
+    {diff:'easy',q:'ما مفهوم الخوارزمية؟',o:['خطوات منظمة لحل مشكلة','برنامج جاهز','لغة برمجة','قاعدة بيانات'],a:0},
+    {diff:'easy',q:'ما مفهوم OOP في البرمجة؟',o:['البرمجة الكائنية التوجه','البرمجة المتوازية','البرمجة الوظيفية','البرمجة المنطقية'],a:0},
+    {diff:'med',q:'ما بنية البيانات المناسبة لـ LIFO؟',o:['المكدس Stack','الطابور Queue','القائمة المرتبطة','الشجرة'],a:0},
+    {diff:'med',q:'ما تعقيد خوارزمية البحث الثنائي؟',o:['O(log n)','O(n)','O(n²)','O(1)'],a:0},
+    {diff:'hard',q:'ما الفرق بين TCP وUDP؟',o:['TCP موثوق ومرتّب وUDP أسرع وغير موثوق','لا فرق','UDP موثوق','TCP أسرع'],a:0},
+    {diff:'hard',q:'ما الفرق بين التجميع والترجمة في البرمجة؟',o:['التجميع يحول لرمز الآلة والترجمة تفسر سطراً بسطر','لا فرق','الترجمة أسرع','التجميع أبطأ'],a:0},
+  ],
+  'عامة':[
+    {diff:'easy',q:'من اخترع نظرية النسبية؟',o:['أينشتاين','نيوتن','هوكينغ','بور'],a:0},
+    {diff:'easy',q:'ما أقدم حضارة في التاريخ؟',o:['السومرية','المصرية','الفينيقية','الصينية'],a:0},
+    {diff:'med',q:'ما أول دولة أطلقت قمراً صناعياً؟',o:['الاتحاد السوفيتي','الولايات المتحدة','المملكة المتحدة','فرنسا'],a:0},
+    {diff:'med',q:'ما مبدأ عدم اليقين في ميكانيكا الكم؟',o:['لا يمكن تحديد الموقع والزخم بدقة تامة','الجسيم في مكانين','الطاقة محدودة','الكتلة متغيرة'],a:0},
+    {diff:'hard',q:'ما نظرية هوكينغ عن الثقوب السوداء؟',o:['تُشعّ إشعاعاً حرارياً يُسمى إشعاع هوكينغ','لا تُشعّ أبداً','تبتلع كل شيء','تتفجر فوراً'],a:0},
+    {diff:'hard',q:'ما طول خط الاستواء تقريباً؟',o:['40,075 كم','35,000 كم','45,000 كم','30,000 كم'],a:0},
+  ],
+  'ثقافة':[
+    {diff:'easy',q:'ما مفهوم التوكل على الله؟',o:['الاعتماد على الله مع الأخذ بالأسباب','ترك العمل','الاتكال الكامل','عدم التخطيط'],a:0},
+    {diff:'easy',q:'ما حكم بر الوالدين؟',o:['فرض عين','سنة مؤكدة','فرض كفاية','واجب'],a:0},
+    {diff:'med',q:'ما مقاصد الشريعة الخمسة؟',o:['الدين والنفس والعقل والنسل والمال','الصلاة والزكاة والصوم','الإيمان والعمل','الدنيا والآخرة'],a:0},
+    {diff:'med',q:'ما الفرق بين الكبائر والصغائر؟',o:['الكبائر فيها وعيد شديد والصغائر دون ذلك','لا فرق','الصغائر أشد','الكبائر مغفورة دائماً'],a:0},
+    {diff:'hard',q:'ما منهج أهل السنة في المتشابهات؟',o:['التفويض أو التأويل بما يليق بالله','التأويل دائماً','التجسيم','التعطيل'],a:0},
+    {diff:'hard',q:'ما مفهوم الاجتهاد في الفقه الإسلامي؟',o:['بذل الفقيه وسعه لاستنباط الحكم الشرعي','الرأي الشخصي','تقليد العلماء','الفتوى العامة'],a:0},
+  ],
+};
+
+// Fill remaining grades by proximity
+[2].forEach(g=>{ QDB_STUDENT[g]={}; STUDENT_CATS.forEach(sc=>{ QDB_STUDENT[g][sc.id]=QDB_STUDENT[1][sc.id].map(q=>{...q}); }); });
+[4].forEach(g=>{ QDB_STUDENT[g]={}; STUDENT_CATS.forEach(sc=>{ QDB_STUDENT[g][sc.id]=QDB_STUDENT[3][sc.id].map(q=>{...q}); }); });
+[6].forEach(g=>{ QDB_STUDENT[g]={}; STUDENT_CATS.forEach(sc=>{ QDB_STUDENT[g][sc.id]=QDB_STUDENT[5][sc.id].map(q=>{...q}); }); });
+[8,9].forEach(g=>{ QDB_STUDENT[g]={}; STUDENT_CATS.forEach(sc=>{ QDB_STUDENT[g][sc.id]=QDB_STUDENT[7][sc.id].map(q=>{...q}); }); });
+[11,12].forEach(g=>{ QDB_STUDENT[g]={}; STUDENT_CATS.forEach(sc=>{ QDB_STUDENT[g][sc.id]=QDB_STUDENT[10][sc.id].map(q=>{...q}); }); });
+
+
+// ══════════════════════════════════════════════════════════
+//  DIFF MAP
+// ══════════════════════════════════════════════════════════
+const DIFF_MAP={
+  easy:{pts:200,label:'سهل',  time:30, color:'var(--green2)'},
+  med: {pts:400,label:'متوسط',time:60, color:'#F39C12'},
+  hard:{pts:600,label:'صعب',  time:90, color:'var(--red2)'},
+};
+const CIRC=213.6;
+
+// ══════════════════════════════════════════════════════════
+//  FIREBASE CONFIG + AUTH
+// ══════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════
+// ⚠️ الخطوات:
+// 1. console.firebase.google.com → مشروع جديد
+// 2. إضافة تطبيق ويب → نسخ القيم أدناه
+// 3. Authentication → Email/Password → Enable
+// 4. Firestore Database → Create → Production mode
+// 5. Rules:
+//    allow read, write: if request.auth != null;
+// ════════════════════════════════════════════════
+const FB_CONFIG = {
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId:             "YOUR_APP_ID"
+};
+
+let auth, db, currentUser = null;
+let OFFLINE_MODE = false;
+
+try {
+  if (typeof firebase !== 'undefined' && FB_CONFIG.apiKey !== "YOUR_API_KEY") {
+    firebase.initializeApp(FB_CONFIG);
+    auth = firebase.auth();
+    db   = firebase.firestore();
+    db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+    auth.onAuthStateChanged(async user => {
+      currentUser = user;
+      if (user) {
+        try {
+          const doc  = await db.collection('users').doc(user.uid).get();
+          const data = doc.exists ? doc.data() : {};
+          gotoMenu(user.displayName || data.name || 'لاعب', data.points || 0);
+        } catch(e) { gotoMenu(user.displayName || 'لاعب', 0); }
+      } else {
+        showScreen('screen-login');
+      }
+    });
+  } else { throw new Error('offline'); }
+} catch(e) {
+  OFFLINE_MODE = true;
+  const s = JSON.parse(localStorage.getItem('hh_sess') || 'null');
+  if (s) gotoMenu(s.name, s.pts || 0);
+  else showScreen('screen-login');
+}
+
+// رسائل أخطاء Firebase بالعربية
+function fbErr(code) {
+  const m = {
+    'auth/user-not-found':          '❌ البريد الإلكتروني غير مسجل',
+    'auth/wrong-password':          '❌ كلمة المرور غير صحيحة',
+    'auth/invalid-credential':      '❌ البريد أو كلمة المرور خاطئة',
+    'auth/email-already-in-use':    '❌ البريد مسجل مسبقاً',
+    'auth/invalid-email':           '❌ البريد الإلكتروني غير صحيح',
+    'auth/weak-password':           '❌ كلمة المرور ضعيفة جداً (6 أحرف+)',
+    'auth/too-many-requests':       '⚠️ محاولات كثيرة، حاول لاحقاً',
+    'auth/network-request-failed':  '⚠️ تحقق من الاتصال بالإنترنت',
+  };
+  return m[code] || '❌ خطأ: ' + code;
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  const err   = document.getElementById('login-err');
+  err.textContent = '';
+  if (!email || !pass) { err.textContent = '⚠️ يرجى ملء جميع الحقول'; return; }
+  if (OFFLINE_MODE) { offlineLogin(email, pass, err); return; }
+  err.innerHTML = '<span style="color:var(--gold)">⏳ جاري الدخول...</span>';
+  try { await auth.signInWithEmailAndPassword(email, pass); }
+  catch(e) { err.textContent = fbErr(e.code); }
+}
+
+async function doRegister() {
+  const name  = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass  = document.getElementById('reg-pass').value;
+  const pass2 = document.getElementById('reg-pass2').value;
+  const err   = document.getElementById('reg-err');
+  err.textContent = '';
+  if (!name||!email||!pass||!pass2) { err.textContent='⚠️ يرجى ملء جميع الحقول'; return; }
+  if (pass !== pass2)  { err.textContent='❌ كلمتا المرور غير متطابقتين'; return; }
+  if (pass.length < 6) { err.textContent='❌ كلمة المرور 6 أحرف على الأقل'; return; }
+  if (OFFLINE_MODE) { offlineRegister(name, email, pass, err); return; }
+  err.innerHTML = '<span style="color:var(--gold)">⏳ جاري إنشاء الحساب...</span>';
+  try {
+    const cred = await auth.createUserWithEmailAndPassword(email, pass);
+    await cred.user.updateProfile({ displayName: name });
+    await db.collection('users').doc(cred.user.uid).set({
+      name, email, points: 0,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    toast('تم إنشاء الحساب! 🎉', 'success');
+  } catch(e) { err.textContent = fbErr(e.code); }
+}
+
+async function doResetPass() {
+  const email = document.getElementById('login-email').value.trim();
+  if (!email) { toast('أدخل إيميلك أولاً', 'error'); return; }
+  if (OFFLINE_MODE) { toast('غير متاح في الوضع المحلي', 'error'); return; }
+  try {
+    await auth.sendPasswordResetEmail(email);
+    toast('تم إرسال رابط الاستعادة لإيميلك ✅', 'success');
+  } catch(e) { toast(fbErr(e.code), 'error'); }
+}
+
+function doLogout() {
+  if (OFFLINE_MODE) { localStorage.removeItem('hh_sess'); showScreen('screen-login'); return; }
+  auth.signOut();
+}
+
+async function addPts(pts) {
+  if (!pts) return;
+  if (OFFLINE_MODE) {
+    const s = JSON.parse(localStorage.getItem('hh_sess') || '{}');
+    s.pts = (s.pts || 0) + pts;
+    localStorage.setItem('hh_sess', JSON.stringify(s));
+    return;
+  }
+  if (!currentUser) return;
+  try {
+    await db.collection('users').doc(currentUser.uid).update({
+      points: firebase.firestore.FieldValue.increment(pts)
+    });
+  } catch(e) { console.warn('addPts:', e); }
+}
+
+// وضع عدم الاتصال (localStorage)
+function offlineLogin(email, pass, err) {
+  const us = JSON.parse(localStorage.getItem('hh_users') || '{}');
+  const k  = btoa(unescape(encodeURIComponent(email)));
+  if (!us[k])  { err.textContent = '❌ البريد غير مسجل'; return; }
+  if (us[k].p !== btoa(unescape(encodeURIComponent(pass)))) { err.textContent = '❌ كلمة المرور خاطئة'; return; }
+  const sess = { uid:k, name:us[k].name, email, pts:us[k].pts||0 };
+  localStorage.setItem('hh_sess', JSON.stringify(sess));
+  currentUser = { uid:k, displayName:us[k].name };
+  gotoMenu(us[k].name, us[k].pts||0);
+}
+
+function offlineRegister(name, email, pass, err) {
+  const us = JSON.parse(localStorage.getItem('hh_users') || '{}');
+  const k  = btoa(unescape(encodeURIComponent(email)));
+  if (us[k]) { err.textContent = '❌ البريد مسجل مسبقاً'; return; }
+  us[k] = { name, p:btoa(unescape(encodeURIComponent(pass))), pts:0 };
+  localStorage.setItem('hh_users', JSON.stringify(us));
+  const sess = { uid:k, name, email, pts:0 };
+  localStorage.setItem('hh_sess', JSON.stringify(sess));
+  currentUser = { uid:k, displayName:name };
+  toast('تم إنشاء الحساب! 🎉', 'success');
+  gotoMenu(name, 0);
+}
+
+function gotoMenu(name, pts) {
+  document.getElementById('menu-username').textContent = '👤 ' + name;
+  document.getElementById('menu-total').textContent    = '🏆 النقاط: ' + pts;
+  showScreen('screen-menu');
+}
+
+// ══════════════════════════════════════════════════════════
+//  SCREEN ROUTER
+// ══════════════════════════════════════════════════════════
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(id==='screen-lb')renderLB();
+  if(id==='screen-grade')buildGradeGrid();
+}
+
+// ══════════════════════════════════════════════════════════
+//  SETUP CAT GRID
+// ══════════════════════════════════════════════════════════
+(function buildSetupCatGrid(){
+  const g=document.getElementById('cat-grid');
+  ALL_CATS.forEach(cat=>{
+    const d=document.createElement('div');
+    d.className='cat-btn-setup';d.dataset.cat=cat.id;
+    d.innerHTML=`<span class="cat-icon">${cat.emoji}</span>${cat.label}`;
+    d.addEventListener('click',()=>toggleSetupCat(d));
+    g.appendChild(d);
+  });
+  g.children[0].classList.add('active');
+  g.children[1].classList.add('active');
+  refreshSetupMax();
+})();
+function toggleSetupCat(el){if(el.classList.contains('locked'))return;el.classList.toggle('active');refreshSetupMax();}
+function refreshSetupMax(){
+  const a=[...document.querySelectorAll('.cat-btn-setup.active')];
+  const n=document.getElementById('cat-max-note');
+  n.textContent=`تم اختيار ${a.length} من ${MAX_CATS}`;
+  if(a.length>=MAX_CATS){
+    n.textContent=`✅ الحد الأقصى (${MAX_CATS}) – ألغِ تحديداً للتغيير`;
+    document.querySelectorAll('.cat-btn-setup:not(.active)').forEach(b=>b.classList.add('locked'));
+  } else {
+    document.querySelectorAll('.cat-btn-setup').forEach(b=>b.classList.remove('locked'));
+  }
+}
+function toggleDiff(el){el.classList.toggle('active');}
+
+// ══════════════════════════════════════════════════════════
+//  GRADE GRID
+// ══════════════════════════════════════════════════════════
+function buildGradeGrid(){
+  const g=document.getElementById('grade-grid');g.innerHTML='';
+  GRADES.forEach(gr=>{
+    const d=document.createElement('div');d.className='grade-card';
+    d.innerHTML=`<div class="gnum">${gr.num}</div><div class="glbl">${gr.label}</div>`;
+    d.onclick=()=>openGrade(gr.num,gr.label);
+    g.appendChild(d);
+  });
+}
+let currentGrade=1;
+function openGrade(num,label){
+  currentGrade=num;
+  document.getElementById('cats-title').textContent='📚 '+label;
+  buildStudentCatGrid();
+  showScreen('screen-cats');
+}
+function buildStudentCatGrid(){
+  const g=document.getElementById('scat-grid');g.innerHTML='';
+  STUDENT_CATS.forEach(sc=>{
+    const d=document.createElement('div');d.className='scat-card';d.dataset.cat=sc.id;
+    d.innerHTML=`<div class="sci">${sc.emoji}</div><div class="scl">${sc.label}</div>`;
+    d.addEventListener('click',()=>toggleScat(d));
+    g.appendChild(d);
+  });
+  refreshScatMax();
+}
+function toggleScat(el){if(el.classList.contains('locked'))return;el.classList.toggle('active');refreshScatMax();}
+function refreshScatMax(){
+  const a=[...document.querySelectorAll('.scat-card.active')];
+  const n=document.getElementById('scat-max-note');
+  n.textContent=`تم اختيار ${a.length} من ${MAX_CATS}`;
+  if(a.length>=MAX_CATS){
+    document.querySelectorAll('.scat-card:not(.active)').forEach(b=>b.classList.add('locked'));
+  } else {
+    document.querySelectorAll('.scat-card').forEach(b=>b.classList.remove('locked'));
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  POWERUPS STATE
+// ══════════════════════════════════════════════════════════
+let PU = { hafra:3, dagf:3, eskot:3, armed:null };
+
+function resetPU() {
+  PU = { hafra:3, dagf:3, eskot:3, armed:null };
+  updatePUDisplay();
+}
+
+function updatePUDisplay() {
+  ['hafra','dagf','eskot'].forEach(p => {
+    const btn  = document.getElementById('pu-'+p);
+    const cnt  = document.getElementById('pu-'+p+'-cnt');
+    const qbtn = document.getElementById('qm-'+p);
+    const used = PU[p] <= 0;
+    if (btn)  { btn.disabled  = used; btn.classList.toggle('used-pu', used);  btn.classList.toggle('armed', PU.armed===p); }
+    if (qbtn) { qbtn.disabled = used; qbtn.classList.toggle('used-pu', used); qbtn.classList.toggle('armed', PU.armed===p); }
+    if (cnt)  cnt.textContent = PU[p] + '✕';
+  });
+}
+
+// Arm a PU from the board bar (before choosing a question)
+function activatePU(type) {
+  if (PU[type] <= 0) { toast('لا يوجد رصيد!', 'error'); return; }
+  PU.armed = (PU.armed === type) ? null : type;
+  updatePUDisplay();
+  if (PU.armed) toast({ hafra:'💣 حفرة مُسلَّحة – اختر السؤال!', dagf:'⚡ ضعّف مُسلَّح – اختر السؤال!', eskot:'🤐 اسكت جاهز – يُستخدم بعد إجابتك الخاطئة!' }[type], 'purple');
+}
+
+// Use a PU from inside the question modal
+function usePU(type) {
+  if (G.answered && type !== 'eskot') { toast('هذه الوسيلة قبل الإجابة فقط', 'error'); return; }
+  if (!G.answered && type === 'eskot') { toast('اسكت تُستخدم بعد إجابتك الخاطئة فقط', 'error'); return; }
+  if (PU[type] <= 0) { toast('لا يوجد رصيد!', 'error'); return; }
+  PU[type]--;
+  PU.armed = type;
+  showPUEffect(type);
+  updatePUDisplay();
+}
+
+function showPUEffect(type) {
+  const txt = { hafra:'💣
+حفرة!', dagf:'⚡
+ضعّف!', eskot:'🤐
+اسكت!' };
+  const clr = { hafra:'rgba(155,89,182,.92)', dagf:'rgba(243,156,18,.92)', eskot:'rgba(231,76,60,.92)' };
+  const el  = document.getElementById('pu-effect');
+  const st  = document.getElementById('pu-effect-text');
+  if (!el || !st) return;
+  st.textContent = txt[type];
+  st.style.cssText = `background:${clr[type]};color:white;font-size:clamp(2rem,6vw,4rem);font-weight:900;text-align:center;padding:20px 40px;border-radius:20px;animation:puPop .85s ease forwards;`;
+  el.style.display = 'flex';
+  setTimeout(() => el.style.display='none', 900);
+}
+
+// ══════════════════════════════════════════════════════════
+//  GAME STATE
+// ══════════════════════════════════════════════════════════
+let G={team1:'',team2:'',score1:0,score2:0,turn:1,answered:false,timer:null,timerSec:0,timerTotal:0,curQ:null,curDiff:'',curKey:''};
+
+// ══════════════════════════════════════════════════════════
+//  START GENERAL GAME
+// ══════════════════════════════════════════════════════════
+function startGame(isStudent) {
+  const t1   = document.getElementById('team1-name').value.trim() || 'الفريق 1';
+  const t2   = document.getElementById('team2-name').value.trim() || 'الفريق 2';
+  const cats = [...document.querySelectorAll('.cat-btn-setup.active')].map(b => b.dataset.cat);
+  const err  = document.getElementById('setup-err');
+  if (!cats.length) { err.textContent = '⚠️ اختر فئة واحدة على الأقل'; return; }
+  err.textContent = '';
+
+  // Build flat QDB tagged with cat
+  const flatDB = [];
+  cats.forEach(cat => {
+    const qcat = QDB_GENERAL.filter(q => q.cat === cat);
+    qcat.forEach(q => flatDB.push({ ...q }));
+  });
+
+  const diffs = ['easy','med','hard'];
+  initGameBoard(t1, t2, cats, diffs, flatDB, false);
+}
+
+// ══════════════════════════════════════════════════════════
+//  START STUDENT GAME
+// ══════════════════════════════════════════════════════════
+function startStudentGame() {
+  const t1   = document.getElementById('steam1').value.trim() || 'الفريق 1';
+  const t2   = document.getElementById('steam2').value.trim() || 'الفريق 2';
+  const cats = [...document.querySelectorAll('.scat-card.active')].map(b => b.dataset.cat);
+  const err  = document.getElementById('scat-err');
+  if (!cats.length) { err.textContent = '⚠️ اختر مادة واحدة على الأقل'; return; }
+  err.textContent = '';
+
+  const gradeDB = QDB_STUDENT[currentGrade] || {};
+  const flatDB  = [];
+  cats.forEach(catId => {
+    (gradeDB[catId] || []).forEach(q => flatDB.push({ ...q, cat: catId }));
+  });
+
+  const diffs = ['easy','med','hard'];
+  initGameBoard(t1, t2, cats, diffs, flatDB, true);
+}
+
+// ══════════════════════════════════════════════════════════
+//  INIT GAME BOARD
+// ══════════════════════════════════════════════════════════
+function initGameBoard(t1, t2, cats, diffs, qdb, isStudent=false) {
+  G = { ...G, team1:t1, team2:t2, score1:0, score2:0, turn:1, answered:false };
+  resetPU();
+
+  // Build boardData: each cat gets exactly 2 easy + 2 med + 2 hard
+  G.boardData = {};
+  cats.forEach(cat => {
+    G.boardData[cat] = {};
+    ['easy','med','hard'].forEach(diff => {
+      const catKey = isStudent ? cat : cat;
+      const pool = shuffle(qdb.filter(q => q.cat === catKey && q.diff === diff));
+      G.boardData[cat][diff] = pool.slice(0, 2); // exactly 2 per level
+    });
+  });
+
+  G.selectedCats  = cats;
+  G.selectedDiffs = diffs;
+  G.isStudent     = isStudent;
+
+  buildBoard(cats, diffs, isStudent);
+  updateBoardUI();
+  showScreen('screen-board');
+}
+
+// ══════════════════════════════════════════════════════════
+//  BUILD BOARD  –  picture-in-center row layout
+// ══════════════════════════════════════════════════════════
+function buildBoard(cats, diffs, isStudent) {
+  const wrap = document.getElementById('board-grid');
+  wrap.innerHTML = '';
+  wrap.style.cssText = 'width:100%;max-width:1200px;margin:0 auto 20px;display:flex;flex-direction:column;gap:8px;padding:0 6px;';
+
+  const diffOrder = ['easy','med','hard'];
+
+  cats.forEach(cat => {
+    const catInfo = isStudent
+      ? STUDENT_CATS.find(c => c.id === cat)
+      : ALL_CATS.find(c => c.id === cat);
+
+    // Collect all cells: 2 easy + 2 med + 2 hard = 6 total
+    const allCells = [];
+    diffOrder.forEach(diff => {
+      if (!diffs.includes(diff)) return;
+      (G.boardData[cat][diff] || []).forEach((q, i) => {
+        allCells.push({ diff, q, key: `${cat}__${diff}__${i}` });
+      });
+    });
+
+    // Left 3 (reversed so highest pts near center), Right 3
+    const left3  = allCells.slice(0, 3).reverse();
+    const right3 = allCells.slice(3, 6);
+
+    // Row
+    const row = document.createElement('div');
+    row.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr) 175px repeat(3,1fr);gap:6px;align-items:center;';
+
+    // Left cells
+    for (let i = 0; i < 3; i++) {
+      row.appendChild(left3[i] ? makeQCell(left3[i], catInfo) : makePH());
+    }
+
+    // Center image strip
+    const strip = document.createElement('div');
+    const hasImg = !isStudent && catInfo?.img;
+    strip.className = 'cat-img-cell' + (hasImg ? '' : ' no-img');
+    strip.style.cssText = 'border-radius:13px;overflow:hidden;position:relative;height:124px;display:flex;flex-direction:column;align-items:center;justify-content:' + (hasImg?'flex-end':'center') + ';padding-bottom:' + (hasImg?'8px':'0') + ';border:1.5px solid rgba(212,175,55,0.24);';
+    if (hasImg) {
+      strip.innerHTML = `<div style="position:absolute;inset:0;background-image:url('${catInfo.img}');background-size:cover;background-position:center;filter:brightness(.3) saturate(.5)"></div><div style="position:relative;z-index:1;font-size:1.9rem">${catInfo.e}</div><div style="position:relative;z-index:1;font-size:.78rem;font-weight:900;color:#fff;text-shadow:0 1px 5px rgba(0,0,0,1);margin-top:3px;text-align:center;padding:0 4px">${catInfo.l}</div>`;
+    } else {
+      strip.style.background = 'linear-gradient(135deg,rgba(22,22,55,.97),rgba(14,14,34,.99))';
+      strip.innerHTML = `<div style="font-size:2rem">${catInfo?.e || '📚'}</div><div style="font-size:.78rem;font-weight:900;color:#fff;margin-top:4px;text-align:center;padding:0 4px">${catInfo?.l || cat}</div>`;
+    }
+    row.appendChild(strip);
+
+    // Right cells
+    for (let i = 0; i < 3; i++) {
+      row.appendChild(right3[i] ? makeQCell(right3[i], catInfo) : makePH());
+    }
+
+    wrap.appendChild(row);
+  });
+}
+
+function makeQCell({ diff, q, key }, catInfo) {
+  const d = DIFF_MAP[diff];
+  const el = document.createElement('div');
+  el.id = 'cell_' + key;
+  el.style.cssText = 'border-radius:10px;background:linear-gradient(135deg,rgba(26,26,55,.9),rgba(14,14,36,.94));border:1.5px solid rgba(212,175,55,.14);height:124px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .28s;position:relative;overflow:hidden;gap:4px;';
+  
+  const ptsColors = { easy:'var(--green2)', med:'#F39C12', hard:'var(--red2)' };
+  const lvlBg = { easy:'rgba(39,174,96,.15)', med:'rgba(243,156,18,.15)', hard:'rgba(231,76,60,.15)' };
+  
+  el.innerHTML = `<div style="font-size:1.5rem;font-weight:900;color:${ptsColors[diff]}">${d.pts}</div><div style="font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:8px;background:${lvlBg[diff]};color:${ptsColors[diff]}">${d.label}</div>`;
+  
+  el.addEventListener('mouseenter', () => { if(!el.classList.contains('used')){el.style.borderColor='var(--gold)';el.style.transform='translateY(-3px)';el.style.boxShadow='0 6px 20px rgba(212,175,55,.2)';}});
+  el.addEventListener('mouseleave', () => { if(!el.classList.contains('used')){el.style.borderColor='rgba(212,175,55,.14)';el.style.transform='';el.style.boxShadow='';}});
+  el.addEventListener('click', () => { if (!el.classList.contains('used')) openQ(q, diff, key, catInfo); });
+  return el;
+}
+
+function makePH() {
+  const p = document.createElement('div');
+  p.style.cssText = 'height:124px;border-radius:10px;background:rgba(255,255,255,.01);border:1px dashed rgba(212,175,55,.05);';
+  return p;
+}
+
+// ══════════════════════════════════════════════════════════
+//  BOARD UI
+// ══════════════════════════════════════════════════════════
+function updateBoardUI(){
+  document.getElementById('b-t1-name').textContent=G.team1;
+  document.getElementById('b-t2-name').textContent=G.team2;
+  document.getElementById('b-t1-pts').textContent=G.score1;
+  document.getElementById('b-t2-pts').textContent=G.score2;
+  document.getElementById('b-turn').textContent=`دور ${G.turn===1?G.team1:G.team2} 🎯`;
+  document.getElementById('b-score-t1').classList.toggle('active-t',G.turn===1);
+  document.getElementById('b-score-t2').classList.toggle('active-t',G.turn===2);
+}
+
+// ══════════════════════════════════════════════════════════
+//  OPEN QUESTION MODAL
+// ══════════════════════════════════════════════════════════
+function openQ(q, diff, key, catInfo) {
+  G.curQ=q; G.curDiff=diff; G.curKey=key; G.answered=false;
+  G.catInfo = catInfo||null;
+
+  // If PU was armed from the board bar, deduct it now (hafra/dagf only – NOT eskot)
+  if (PU.armed === 'hafra' || PU.armed === 'dagf') {
+    PU[PU.armed]--;
+    showPUEffect(PU.armed);
+  } else {
+    PU.armed = null; // clear any stale eskot arm
+  }
+
+  const d = DIFF_MAP[diff];
+  const ptsDisplay = PU.armed === 'dagf' ? (d.pts*2)+' نقطة ⚡' : d.pts+' نقطة';
+
+  document.getElementById('qm-diff').textContent = d.label;
+  document.getElementById('qm-diff').className   = 'qm-badge ' + diff;
+  document.getElementById('qm-pts').textContent  = ptsDisplay;
+  const ei = catInfo?.emoji || catInfo?.e || '📚';
+  const li = catInfo?.label || catInfo?.l || (q.cat||'');
+  document.getElementById('qm-cat').textContent = ei + ' ' + li;
+  document.getElementById('qm-text').textContent = q.q;
+  document.getElementById('qm-actions').style.display = 'none';
+  updatePUDisplay();
+
+  const opts = shuffle([...q.o.map((o,i) => ({ o, correct: i===q.a }))]);
+  const grid = document.getElementById('qm-opts');
+  grid.innerHTML = '';
+  opts.forEach(item => {
+    const b = document.createElement('button');
+    b.className = 'opt-btn';
+    b.textContent = item.o;
+    b.onclick = () => answerQ(b, item.correct, d.pts);
+    grid.appendChild(b);
+  });
+
+  document.getElementById('q-modal').classList.add('open');
+  startTimerCircle(d.time, diff);
+}
+
+function closeModal() {
+  document.getElementById('q-modal').classList.remove('open');
+  clearInterval(G.timer);
+  // Mark cell as used
+  const cell = document.getElementById('cell_' + G.curKey);
+  if (cell) {
+    cell.classList.add('used');
+    cell.style.opacity = '0.2';
+    cell.style.filter  = 'grayscale(1)';
+    cell.style.cursor  = 'not-allowed';
+    cell.style.transform = '';
+  }
+  PU.armed = null;
+  G.turn = G.turn === 1 ? 2 : 1;
+  updateBoardUI();
+  updatePUDisplay();
+  checkDone();
+}
+
+// ══════════════════════════════════════════════════════════
+//  ANSWER
+// ══════════════════════════════════════════════════════════
+function answerQ(btn, correct, pts) {
+  if (G.answered) return;
+  G.answered = true;
+  clearInterval(G.timer);
+
+  const armed = PU.armed;
+  let finalPts = pts;
+
+  // Reveal answer
+  btn.classList.add(correct ? 'correct' : 'wrong');
+  const correctText = G.curQ.o[G.curQ.a];
+  document.querySelectorAll('#qm-opts .opt-btn').forEach(b => {
+    b.disabled = true;
+    if (b.textContent === correctText) b.classList.add('correct');
+  });
+
+  if (correct) {
+    // ⚡ Dagf: double points
+    if (armed === 'dagf') finalPts *= 2;
+    // Add points to current team
+    if (G.turn === 1) G.score1 += finalPts; else G.score2 += finalPts;
+
+    if (armed === 'hafra') {
+      // 💣 Hafra: ALSO deduct from opponent – even if it goes negative
+      if (G.turn === 1) G.score2 -= pts;
+      else              G.score1 -= pts;
+      toast(`✅ صح! +${finalPts} 💣 خُصم ${pts} من الخصم! (${G.turn===1?G.team2+': '+G.score2:G.team1+': '+G.score1})`, 'success');
+    } else {
+      toast('✅ إجابة صحيحة! +' + finalPts + (armed==='dagf' ? ' ⚡ مضاعف!' : ''), 'success');
+    }
+  } else {
+    if (armed === 'eskot') {
+      // 🤐 Eskot: opponent cannot answer
+      toast('❌ خطأ! 🤐 الخصم محروم من الإجابة على هذا السؤال', 'info');
+    } else {
+      toast('❌ إجابة خاطئة! الصحيحة: ' + correctText, 'error');
+    }
+  }
+
+  // Update score display
+  document.getElementById('b-t1-pts').textContent = G.score1;
+  document.getElementById('b-t2-pts').textContent = G.score2;
+  PU.armed = null;
+  document.getElementById('qm-actions').style.display = 'flex';
+}
+
+// ══════════════════════════════════════════════════════════
+//  TIMER
+// ══════════════════════════════════════════════════════════
+function startTimerCircle(sec,diff){
+  clearInterval(G.timer);
+  G.timerSec=sec;G.timerTotal=sec;
+  const prog=document.getElementById('t-prog');
+  const num=document.getElementById('t-num');
+  prog.style.stroke=DIFF_MAP[diff].color;
+  const render=()=>{
+    const pct=G.timerSec/G.timerTotal;
+    prog.style.strokeDashoffset=CIRC*(1-pct);
+    num.textContent=G.timerSec;
+    if(pct<0.25)prog.style.stroke='var(--red2)';
+    else if(pct<0.5)prog.style.stroke='#F39C12';
+  };
+  render();
+  G.timer=setInterval(()=>{
+    G.timerSec--;render();
+    if(G.timerSec<=0){
+      clearInterval(G.timer);
+      if(!G.answered){
+        G.answered=true;
+        const ct=G.curQ.o[G.curQ.a];
+        document.querySelectorAll('#qm-opts .opt-btn').forEach(b=>{b.disabled=true;if(b.textContent===ct)b.classList.add('correct');});
+        toast('⏰ انتهى الوقت! الإجابة: '+ct,'info');
+        document.getElementById('qm-actions').style.display='flex';
+      }
+    }
+  },1000);
+}
+
+// ══════════════════════════════════════════════════════════
+//  CHECK DONE
+// ══════════════════════════════════════════════════════════
+function checkDone(){
+  const cells=document.querySelectorAll('.qcell');
+  if([...cells].every(c=>c.classList.contains('used')))setTimeout(endGame,500);
+}
+function endGame(){
+  clearInterval(G.timer);
+  document.getElementById('res-t1-name').textContent=G.team1;
+  document.getElementById('res-t2-name').textContent=G.team2;
+  document.getElementById('res-t1-pts').textContent=G.score1;
+  document.getElementById('res-t2-pts').textContent=G.score2;
+  let w='';
+  if(G.score1>G.score2){w='🏆 الفائز: '+G.team1;document.getElementById('result-trophy').textContent='🏆';}
+  else if(G.score2>G.score1){w='🏆 الفائز: '+G.team2;document.getElementById('result-trophy').textContent='🏆';}
+  else{w='🤝 تعادل!';document.getElementById('result-trophy').textContent='🤝';}
+  document.getElementById('result-winner').textContent=w;
+  addPts(Math.max(G.score1,G.score2));
+  showScreen('screen-result');
+}
+function confirmQuit(){
+  if(confirm('هل تريد إنهاء اللعبة؟')){
+    clearInterval(G.timer);
+    document.getElementById('q-modal').classList.remove('open');
+    showScreen('screen-menu');
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  LEADERBOARD
+// ══════════════════════════════════════════════════════════
+async function renderLB() {
+  const el = document.getElementById('lb-list');
+  el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--gold)">⏳ جاري التحميل...</div>';
+  try {
+    if (OFFLINE_MODE) {
+      const us  = JSON.parse(localStorage.getItem('hh_users') || '{}');
+      const arr = Object.values(us).map(u => ({ name:u.name, pts:u.pts||0 })).sort((a,b) => b.pts - a.pts);
+      renderLBRows(el, arr);
+    } else {
+      const snap = await db.collection('users').orderBy('points','desc').limit(20).get();
+      const arr  = snap.docs.map(d => ({ name:d.data().name, pts:d.data().points||0 }));
+      renderLBRows(el, arr);
+    }
+  } catch(e) {
+    el.innerHTML = '<p style="color:var(--text2);text-align:center">تعذّر التحميل</p>';
+  }
+}
+
+function renderLBRows(el, arr) {
+  if (!arr.length) {
+    el.innerHTML = '<p style="color:var(--text2);text-align:center;padding:20px">لا يوجد لاعبون بعد</p>';
+    return;
+  }
+  const medals = ['🥇','🥈','🥉'];
+  el.innerHTML = arr.map((p,i) =>
+    `<div class="lb-row">
+       <div class="lb-rank">${medals[i] || '#'+(i+1)}</div>
+       <div class="lb-name">${esc(p.name)}</div>
+       <div class="lb-pts">${p.pts} نقطة</div>
+     </div>`
+  ).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════════════════════
+function shuffle(a){const r=[...a];for(let i=r.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]];}return r;}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+let tt;function toast(msg,type='info'){const t=document.getElementById('toast');t.textContent=msg;t.className='show '+type;clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),3200);}
+
+// ══════════════════════════════════════════════════════════
+//  INIT – Firebase handles auth state, offline fallback above
+// ══════════════════════════════════════════════════════════
+// Note: onAuthStateChanged() or initOfflineMode() handles routing
+// Build grade grid eagerly
+buildGradeGrid();
+
+</script>
+</body>
+</html>
